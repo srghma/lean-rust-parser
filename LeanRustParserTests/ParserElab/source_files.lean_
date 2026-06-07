@@ -1,0 +1,16 @@
+module
+import LeanRustParser.Basic
+import LeanRustParser.ParserElab
+
+/-- Automatic tests generated from LeanRustParserTests/ParserElab/source_files.txt --/
+
+/-! #! -/
+#guard rust_ast
+fn main() {}
+end = TODO rust code here
+
+/-! #![feature(thing)] -/
+#guard rust_ast
+fn main() {}
+end = TODO rust code here
+

@@ -1,3 +1,5 @@
-import LeanRustParser.Basic
-import LeanRustParser.PrettyPrinter
-import LeanRustParser.ParserElab
+module
+prelude
+public import LeanRustParser.Basic
+public import LeanRustParser.PrettyPrinter
+public import LeanRustParser.ParserElab

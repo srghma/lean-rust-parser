@@ -1,0 +1,510 @@
+module
+import LeanRustParser.Basic
+import LeanRustParser.ParserElab
+
+/-- Automatic tests generated from LeanRustParserTests/ParserElab/declarations.txt --/
+
+/-! mod english; -/
+#guard rust_ast
+mod english {}
+
+mod english {
+    mod greetings {}
+    mod farewells {}
+}
+
+pub mod english;
+end = TODO rust code here
+
+/-! extern crate std; -/
+#guard rust_ast
+extern crate std as ruststd;
+pub extern crate futures;
+end = TODO rust code here
+
+/-! fn main() {} -/
+#guard rust_ast
+fn add(x: i32, y: i32) -> i32 {
+    return x + y;
+}
+
+fn takes_slice(slice: &str) {
+    println!("Got: {}", slice);
+}
+
+fn foo() -> [u32; 2] {
+    return [1, 2];
+}
+
+fn foo() -> (u32, u16) {
+    return (1, 2);
+}
+
+fn foo() {
+    return
+}
+
+fn foo(x: impl FnOnce() -> result::Result<T, E>) {}
+
+fn foo(#[attr] x: i32, #[attr] x: i64) {}
+
+fn accumulate(self) -> Machine<{State::Accumulate}> {}
+
+fn foo(bar: impl for<'a> Baz<Quux<'a>>) {}
+end = TODO rust code here
+
+/-! fn triples(a: impl B) -> impl Iterator<Item=(usize)> { -/
+#guard rust_ast
+}
+end = TODO rust code here
+
+/-! fn capture<T>(&self) -> impl Iterator<Item = usize> + use<'_, T> { -/
+#guard rust_ast
+}
+end = TODO rust code here
+
+/-! fn capture(&self) -> impl Iterator<Item = usize> + use<> { -/
+#guard rust_ast
+}
+end = TODO rust code here
+
+/-! extern "C" fn foo() {} -/
+#guard rust_ast
+extern "C" fn printf(
+    *const c_char,
+    ...,
+) {}
+
+pub unsafe extern "C" fn c_variadic_no_use(fmt: *const i8, mut ap: ...) -> i32 {
+    // CHECK: call void @llvm.va_start
+    vprintf(fmt, ap.as_va_list())
+    // CHECK: call void @llvm.va_end
+}
+end = TODO rust code here
+
+/-! use abc; -/
+#guard rust_ast
+use phrases::japanese;
+use sayings::english::greetings;
+use sayings::english::greetings as en_greetings ;
+use phrases::english::{greetings,farewells};
+use sayings::japanese::farewells::*;
+pub use self::greetings::hello;
+use sayings::english::{self, greetings as en_greetings, farewells as en_farewells};
+use three::{ dot::{one, four} };
+use my::{ some::* };
+use my::{*};
+use ::*;
+end = TODO rust code here
+
+/-! let x; -/
+#guard rust_ast
+let x = 42;
+let x: i32;
+let x: i8 = 42;
+let mut x = 5;
+let y: bool = false;
+let bool: bool = false;
+let u32: str = "";
+end = TODO rust code here
+
+/-! let Foo::Bar { -/
+#guard rust_ast
+    texts,
+    values,
+} = foo().bar().await? else {
+    return Err(index)
+};
+
+let Some(x) = y else {
+    let None = z else {
+        foo();
+        break;
+    };
+    continue;
+};
+end = TODO rust code here
+
+/-! let a = if b { -/
+#guard rust_ast
+    c
+} else {
+    d
+};
+end = TODO rust code here
+
+/-! let default = 1; -/
+#guard rust_ast
+let union = 2;
+end = TODO rust code here
+
+/-! struct Proton; -/
+#guard rust_ast
+struct Electron {}
+struct Person {pub name: String, pub age: u32}
+struct Point {
+  x: i32,
+
+  #[attribute1]
+  y: i32,
+}
+struct Color(pub i32, i32, i32);
+struct Inches(i32);
+struct Empty(pub ());
+end = TODO rust code here
+
+/-! pub union in6_addr__bindgen_ty_1 { -/
+#guard rust_ast
+    pub __u6_addr8: [__uint8_t; 16usize],
+    pub __u6_addr16: [__uint16_t; 8usize],
+    pub __u6_addr32: [__uint32_t; 4usize],
+    _bindgen_union_align: [u32; 4usize],
+}
+end = TODO rust code here
+
+/-! struct A<B> {} -/
+#guard rust_ast
+struct C<'a, 'b> {}
+struct C<'a,> {}
+struct D<const SIZE: usize> {}
+struct E<#[attr] T> {}
+end = TODO rust code here
+
+/-! pub enum Option<T> { -/
+#guard rust_ast
+    None,
+    Some(T),
+}
+
+pub enum Node<T: Item> {
+    Internal {
+        children: Vec<Tree<T>>,
+        height: u16
+    },
+    #[attribute1]
+    #[attribute2]
+    Leaf {
+        value: T
+    }
+}
+end = TODO rust code here
+
+/-! pub enum c_style_enum { -/
+#guard rust_ast
+    val1 = 1,
+    val2 = 2
+}
+end = TODO rust code here
+
+/-! pub fn splice<T: Into<Text>>(&mut self, old_range: Range<usize>, new_text: T) { -/
+#guard rust_ast
+}
+pub fn uninit_array<const LEN: usize>() -> [Self; LEN] {}
+end = TODO rust code here
+
+/-! fn foo(mut x : u32) { -/
+#guard rust_ast
+}
+end = TODO rust code here
+
+/-! fn f1([x, y]: [u32; 2]) {} -/
+#guard rust_ast
+fn f2(&x: &Y) {}
+fn f3((x, y): (T, U)) {}
+end = TODO rust code here
+
+/-! trait Callback { -/
+#guard rust_ast
+    fn call(self: Box<Self>);
+}
+end = TODO rust code here
+
+/-! const N: i32 = 5; -/
+#guard rust_ast
+trait Foo {
+    const X: u8;
+}
+end = TODO rust code here
+
+/-! static N: i32 = 5; -/
+#guard rust_ast
+static mut __progname: *mut ::c_char;
+end = TODO rust code here
+
+/-! type Inch = u64; -/
+#guard rust_ast
+type Name<T> = Vec<T>;
+type LazyResolve = impl (FnOnce() -> Capture) + Send + Sync + UnwindSafe;
+end = TODO rust code here
+
+/-! type Foo<T> where T: Copy = Box<T>; -/
+#guard rust_ast
+type Assoc3 where = () where;
+end = TODO rust code here
+
+/-! fn main() { -/
+#guard rust_ast
+    ;
+}
+end = TODO rust code here
+
+/-! #[test] -/
+#guard rust_ast
+fn test_foo() {}
+
+#[derive(Debug)]
+struct Baz;
+
+#[derive(Debug, Eq,)]
+struct Foo;
+
+#[cfg(target_os = "macos")]
+mod macos_only {}
+
+#![allow(clippy::useless_transmute)]
+
+#[clippy::cyclomatic_complexity = "100"]
+end = TODO rust code here
+
+/-! mod macos_only { -/
+#guard rust_ast
+  #![cfg(target_os = "macos")]
+}
+
+match ty {
+    #![cfg_attr(all(test, exhaustive), deny(non_exhaustive_omitted_patterns))]
+    syn::Type::Array(ty) => self.visit_type(&ty.elem),
+}
+end = TODO rust code here
+
+/-! #[doc = include_str!("foo-doc.md")] -/
+#guard rust_ast
+fn foo() {}
+
+#[namespace = foo::bar]
+fn baz() {}
+end = TODO rust code here
+
+/-! foo(#[attr(=> arbitrary tokens <=)] x, y); -/
+#guard rust_ast
+foo(#[bar(some tokens are special in other contexts: $/';()*()+.)] x);
+end = TODO rust code here
+
+/-! // Example from https://github.com/dtolnay/thiserror/blob/21c26903e29cb92ba1a7ff11e82ae2001646b60d/README.md -/
+#guard rust_ast
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("first letter must be lowercase but was {:?}", first_char(.0))]
+    WrongCase(String),
+    #[error("invalid index {idx}, expected at least {} and at most {}", .limits.lo, .limits.hi)]
+    OutOfBounds { idx: usize, limits: Limits },
+}
+end = TODO rust code here
+
+/-! fn foo() { -/
+#guard rust_ast
+   bar(x,
+       #[cfg(foo = "bar")]
+       y);
+   let z = [#[hello] 2, 7, 8];
+   let t = (#[hello] 2, 7, 8);
+}
+end = TODO rust code here
+
+/-! impl Person { -/
+#guard rust_ast
+  const leg_count : u32 = 2;
+
+  fn walk(self) {}
+  fn walk_mut(mut self) {}
+  fn talk(& self) {}
+  fn talk_mut(&'a mut self) {}
+}
+
+impl Machine<{State::Init}> {}
+end = TODO rust code here
+
+/-! impl<'a> iter::Iterator for Self::Iter<'a> { -/
+#guard rust_ast
+}
+
+impl ConvertTo<i64> for i32 {
+    fn convert(&self) -> i64 { *self as i64 }
+}
+end = TODO rust code here
+
+/-! unsafe impl Foo { -/
+#guard rust_ast
+}
+end = TODO rust code here
+
+/-! pub unsafe trait Trait {} -/
+#guard rust_ast
+unsafe impl Trait for dyn (::std::any::Any) + Send { }
+end = TODO rust code here
+
+/-! impl<K: Debug + Ord> Debug for OccupiedError<K>; -/
+#guard rust_ast
+impl<K: Debug + Ord> Display for OccupiedError<K>;
+end = TODO rust code here
+
+/-! impl Foo { -/
+#guard rust_ast
+  const default fn bar() -> i32 {
+    // Make 'default' still works as an identifier
+    default.bar();
+  }
+}
+end = TODO rust code here
+
+/-! pub trait Item: Clone + Eq + fmt::Debug { -/
+#guard rust_ast
+    fn summarize(&self) -> Self::Summary;
+}
+
+unsafe trait Foo { }
+end = TODO rust code here
+
+/-! trait Add<RHS=Self> { -/
+#guard rust_ast
+    type Output;
+    fn add(self, rhs: RHS) -> Self::Output;
+}
+end = TODO rust code here
+
+/-! trait Foo<T: ?Sized> { -/
+#guard rust_ast
+}
+
+fn univariant(this: &impl ?Sized, that: &(impl LayoutCalculator + ?Sized)) {}
+end = TODO rust code here
+
+/-! pub trait A: B + C + D { -/
+#guard rust_ast
+    private_decl!{}
+    fn f(&self);
+}
+end = TODO rust code here
+
+/-! pub trait Graph { -/
+#guard rust_ast
+    type N: fmt::Display;
+    type E;
+}
+end = TODO rust code here
+
+/-! impl Trait for T { -/
+#guard rust_ast
+    type Associated = T where 'static: 'static;
+}
+end = TODO rust code here
+
+/-! pub trait Database { -/
+#guard rust_ast
+    type F<'a, D>: Future<Output = D> + 'a;
+}
+
+impl Database for Foo {
+    type F<'a, D> = DatabaseFuture<'a, D>;
+}
+
+fn use_database1<D: Database<F<'a, TD> = F>>() {}
+
+fn use_database2<D>()
+where
+    D: Database<F<'a, TD> = F>,
+{}
+end = TODO rust code here
+
+/-! trait T: for<'a> AddAssign<&'a usize> { -/
+#guard rust_ast
+}
+
+type FnObject<'b> = dyn for<'a> FnLike<&'a isize, &'a isize> + 'b;
+end = TODO rust code here
+
+/-! pub fn a() {} -/
+#guard rust_ast
+pub(super) fn b() {}
+pub(self) fn c() {}
+pub(crate) fn c() {}
+pub(in crate::d) fn e() {}
+end = TODO rust code here
+
+/-! fn foo(str: *const c_char) {} -/
+#guard rust_ast
+fn bar(bool: bool) {}
+end = TODO rust code here
+
+/-! fn walk<F>(&self, it: &mut F) -> bool -/
+#guard rust_ast
+    where F: FnMut(&Pat) -> bool
+{
+  return false
+}
+
+impl<'a, T: 'a + Item> Iterator for Iter<'a, T> where Self: 'a {
+}
+
+impl<T> A for B<T>
+    where C<T>: D,
+          T: 'c,
+          'c: 'b,
+{
+}
+
+impl<'a, E> Read
+where &'a E: Read,
+{
+}
+
+impl<T> A for B<T> where (T, T, T): C, {}
+
+impl<T> A for B<T>
+    where for<'a> D<T>: E<'a>,
+{
+}
+
+pub trait A<B> where B: C,
+{
+}
+
+fn foo<A>() where A: B + As<f64>, f64: As<A> {}
+
+impl<A> Default for B<A> where *mut A: C + D {}
+end = TODO rust code here
+
+/-! extern { -/
+#guard rust_ast
+  pub fn napi_module_register(mod_: *mut napi_module);
+}
+
+extern "C" {}
+
+unsafe extern "C" {}
+end = TODO rust code here
+
+/-! crate mod foo; -/
+#guard rust_ast
+crate struct Foo(crate crate::Bar);
+crate fn foo() { }
+crate const X: u32 = 0;
+end = TODO rust code here
+
+/-! struct A { -/
+#guard rust_ast
+  a: default::B,
+  b: union::C,
+}
+end = TODO rust code here
+
+/-! fn foo<D>(val: D) -/
+#guard rust_ast
+where
+    [u8; 32]: From<D>,
+
+{}
+end = TODO rust code here
+

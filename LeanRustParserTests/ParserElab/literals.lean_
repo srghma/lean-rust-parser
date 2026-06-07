@@ -1,0 +1,74 @@
+module
+import LeanRustParser.Basic
+import LeanRustParser.ParserElab
+
+/-- Automatic tests generated from LeanRustParserTests/ParserElab/literals.txt --/
+
+/-! 0; -/
+#guard rust_ast
+0___0;
+123;
+0usize;
+123i32;
+123u32;
+123_u32;
+0xff_u8;
+0o70_i16;
+0b1111_1111_1001_0000_i32;
+1u128;
+end = TODO rust code here
+
+/-! 123.123; -/
+#guard rust_ast
+2.;
+123.0f64;
+0.1f64;
+0.1f32;
+12E+99_f64;
+end = TODO rust code here
+
+/-! ""; -/
+#guard rust_ast
+"abc";
+c"foo";
+b"foo\nbar";
+"foo\
+    bar";
+"\"foo\"";
+"/* foo bar */ foo bar";
+"foo\x42\x43bar";
+"foo \x42  \x43 bar";
+end = TODO rust code here
+
+/-! r#"abc"#; r##"ok"##; -/
+#guard rust_ast
+r##"foo #"# bar"##;
+r###"foo ##"## bar"###;
+r######"foo ##### bar"######;
+end = TODO rust code here
+
+/-! br#"abc"#; -/
+#guard rust_ast
+br##"abc"##;
+end = TODO rust code here
+
+/-! cr#"abc"#; -/
+#guard rust_ast
+cr##"abc"##;
+end = TODO rust code here
+
+/-! 'a'; -/
+#guard rust_ast
+'\'';
+'\0';
+b'x';
+'\t';
+'\xff';
+'\\';
+end = TODO rust code here
+
+/-! true; -/
+#guard rust_ast
+false;
+end = TODO rust code here
+

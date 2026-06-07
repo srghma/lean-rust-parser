@@ -4,47 +4,12 @@ module
 -- Pretty-printer for the Rust AST defined in Rust/Basic.lean.
 -- Produces indented, source-like Rust output.
 
-public import LeanRustParser.Basic
+public import LeanRustParser.Basic.NonMutual
+public import LeanRustParser.Basic.Mutual
+public import LeanRustParser.Basic.SourceFile
+public import LeanRustParser.Doc
 
 @[expose] public section
-
-/-! ──────────────────────────────────────────────────────────────
-    § 1  Doc combinator
-──────────────────────────────────────────────────────────────── -/
-
-/-- A very small pretty-printer combinator. -/
-structure Doc where
-  render : Nat → String
-  deriving Inhabited
-
-namespace Doc
-
-def text (s : String) : Doc  := ⟨fun _ => s⟩
-def empty : Doc              := text ""
-def nl    : Doc              := ⟨fun n => "\n" ++ String.ofList (List.replicate (n * 2) ' ')⟩
-def indent (d : Doc) : Doc   := ⟨fun n => d.render (n + 1)⟩
-
-def append (a b : Doc) : Doc := ⟨fun n => a.render n ++ b.render n⟩
-instance : Append Doc        := ⟨append⟩
-
-def join (sep : Doc) : List Doc → Doc
-  | []      => empty
-  | [x]     => x
-  | x :: xs => x ++ sep ++ join sep xs
-
-def commaList  (ds : List Doc) : Doc := join (text ", ") ds
-def commaLine  (ds : List Doc) : Doc := join (text "," ++ nl) ds
-
-/-- `open_ { indent(nl ++ body) nl close_ }` -/
-def braced (open_ close_ : String) (body : Doc) : Doc :=
-  text open_ ++ indent (nl ++ body) ++ nl ++ text close_
-
-def bracedInline (open_ close_ : String) (body : Doc) : Doc :=
-  text open_ ++ body ++ text close_
-
-def toString (d : Doc) : String := d.render 0
-
-end Doc
 
 /-! ──────────────────────────────────────────────────────────────
     § 2  Pretty-printer functions (mutual)
@@ -232,10 +197,13 @@ mutual
 
   partial def ppBlock : Block → Doc
     | .mk label stmts tail =>
-        let lbl := label.map (fun l => ppLabel l ++ Doc.text ": ") |>.getD Doc.empty
-        let bodyDocs := stmts.map ppStmt ++ (tail.map ppExpr).toList
-        let body := Doc.join Doc.nl bodyDocs
-        lbl ++ Doc.braced "{" "}" body
+      let lbl := label.map (fun l => ppLabel l ++ Doc.text ": ") |>.getD Doc.empty
+      let bodyDocs := stmts.map ppStmt ++ (tail.map ppExpr).toList
+      if bodyDocs.isEmpty then
+          lbl ++ Doc.text "{}"
+      else
+          let body := Doc.join Doc.nl bodyDocs
+          lbl ++ Doc.braced "{" "}" body
 
   partial def ppStmt : Stmt → Doc
     | .empty          => Doc.text ";"
@@ -789,7 +757,7 @@ mutual
     | .delegation attrs vis id target rename body =>
         ppAttrs attrs ++
         ppVisOpt vis ++
-        Doc.text "reuse " ++ ppScopedPath target ++
+        Doc.text "reuse " ++ ppScopedPath target ++ Doc.text "::" ++ ppIdent id ++
         (rename.map (fun r => Doc.text " as " ++ ppIdent r) |>.getD Doc.empty) ++
         (body.map (fun b => Doc.text " " ++ ppBlock b) |>.getD (Doc.text ";"))
     | .delegationMac attrs target suffixes body =>

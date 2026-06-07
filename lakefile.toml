@@ -1,5 +1,6 @@
 name = "lean-rust-parser"
 defaultTargets = ["LeanRustParser"]
+testDriver = "LeanRustParserTests"
 
 [leanOptions]
 pp.unicode.fun = true
@@ -8,3 +9,14 @@ relaxedAutoImplicit = false
 
 [[lean_lib]]
 name = "LeanRustParser"
+supportInterpreter = true
+
+[[lean_lib]]
+name = "LeanRustParserTests"
+globs = ["LeanRustParserTests.+"]
+supportInterpreter = true
+
+[[lean_exe]]
+name = "LeanRustParserTestsExe"
+root = "LeanRustParserTests.Main"
+supportInterpreter = true
