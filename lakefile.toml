@@ -1,0 +1,10 @@
+name = "lean-rust-parser"
+defaultTargets = ["LeanRustParser"]
+
+[leanOptions]
+pp.unicode.fun = true
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[lean_lib]]
+name = "LeanRustParser"
