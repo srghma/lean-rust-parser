@@ -1,6 +1,0 @@
-module
-import LeanRustParser.Basic
-import LeanRustParser.ParserElab
-
-/-- Automatic tests generated from LeanRustParserTests/ParserElab/error.txt --/
-

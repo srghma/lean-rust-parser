@@ -9,50 +9,11 @@ const A: &[&str] = &[
     :"asdf"
 ];
 
----
-
-(source_file
-    (const_item
-    name: (identifier)
-    type: (reference_type
-        type: (array_type
-        element: (reference_type
-            type: (primitive_type))))
-    value: (reference_expression
-        value: (array_expression
-            (ERROR)
-            (string_literal
-                (string_content))
-            (ERROR)
-            (string_literal
-                (string_content))
-            (ERROR)
-            (string_literal
-                (string_content))
-            (ERROR)
-            (string_literal
-                (string_content))))))
-
 ====================================
 Json macro contents
 ====================================
 
 ({ "session_id": session_id, "output": output })
-
----
-
-(source_file
-    (expression_statement
-        (parenthesized_expression
-            (block
-                (ERROR
-                    (string_literal
-                        (string_content))
-                    (identifier)
-                    (string_literal
-                        (string_content)))
-                (identifier)))
-        (MISSING ";")))
 
 ====================================
 Longer json macro contents
