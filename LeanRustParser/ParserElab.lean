@@ -50,8 +50,10 @@ syntax num                        : rust_literal  -- integer
 syntax scientific                 : rust_literal  -- float
 syntax str                        : rust_literal  -- string
 syntax char                       : rust_literal  -- char
-syntax "true"                     : rust_literal
-syntax "false"                    : rust_literal
+syntax (name := rust_true) &"true"  : rust_literal
+syntax (name := rust_false) &"false" : rust_literal
+
+
 
 /-! ──────────────────────────────────────────────────────────────
     § 3  Paths (ScopedPath)
@@ -600,8 +602,8 @@ macro_rules
 ──────────────────────────────────────────────────────────────── -/
 
 macro_rules
-  | `(rust_literal| true)  => `(term| Literal.bool_ Bool.true)
-  | `(rust_literal| false) => `(term| Literal.bool_ Bool.false)
+  | `(rust_true| true)  => `(term| Literal.bool_ Bool.true)
+  | `(rust_false| false) => `(term| Literal.bool_ Bool.false)
   | `(rust_literal| $n:num)   => do
       let s := toString n.getNat
       `(term| Literal.int_ $(Lean.quote s))

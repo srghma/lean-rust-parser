@@ -1,6 +1,6 @@
 name = "lean-rust-parser"
 defaultTargets = ["LeanRustParser"]
-testDriver = "LeanRustParserTests"
+testDriver = "LeanRustParserTestsExe"
 
 [leanOptions]
 pp.unicode.fun = true

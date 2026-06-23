@@ -1,6 +1,8 @@
 module
-import Std
-import LeanRustParserTests.ParserElab.Async
+
+public import LeanRustParserTests.ParserElab.Async
+
+@[expose] public section
 
 def runTests (tests : List (String × String × String)) : IO Bool := do
   let mut allOk := true
