@@ -174,12 +174,17 @@ syntax "return" rust_expr                  : rust_expr
 syntax "break"                             : rust_expr
 syntax "break" rust_expr                   : rust_expr
 syntax "continue"                          : rust_expr
+syntax (name := rust_yield) "yield"       : rust_expr
+syntax (name := rust_yield_expr) "yield" rust_expr : rust_expr
 
 -- Block expressions
 syntax rust_block                          : rust_expr
 syntax "unsafe" rust_block                 : rust_expr
 syntax "async" rust_block                  : rust_expr
 syntax "async" "move" rust_block           : rust_expr
+syntax (name := rust_gen_block) "gen" rust_block : rust_expr
+syntax (name := rust_gen_move_block) "gen" "move" rust_block : rust_expr
+syntax (name := rust_try_block) "try" rust_block : rust_expr
 
 -- If / match / while / loop / for
 syntax "if" rust_expr rust_block                         : rust_expr
@@ -189,9 +194,20 @@ syntax "while" rust_expr rust_block                      : rust_expr
 syntax "loop" rust_block                                 : rust_expr
 syntax "for" rust_pat "in" rust_expr rust_block          : rust_expr
 
+declare_syntax_cat rust_closure_param
+syntax rust_pat                                          : rust_closure_param
+syntax rust_pat ":" rust_ty                              : rust_closure_param
+
 -- Closures
-syntax "|" rust_param,* "|" rust_expr                   : rust_expr
-syntax "move" "|" rust_param,* "|" rust_expr            : rust_expr
+syntax "|" rust_closure_param,* "|" ("->" rust_ty)? rust_expr                   : rust_expr
+syntax "move" "|" rust_closure_param,* "|" ("->" rust_ty)? rust_expr            : rust_expr
+syntax "async" "|" rust_closure_param,* "|" ("->" rust_ty)? rust_expr           : rust_expr
+syntax "async" "move" "|" rust_closure_param,* "|" ("->" rust_ty)? rust_expr      : rust_expr
+
+syntax "||" ("->" rust_ty)? rust_expr                                           : rust_expr
+syntax "move" "||" ("->" rust_ty)? rust_expr                                    : rust_expr
+syntax "async" "||" ("->" rust_ty)? rust_expr                                   : rust_expr
+syntax "async" "move" "||" ("->" rust_ty)? rust_expr                             : rust_expr
 
 -- Tuple / array constructors
 syntax "(" rust_expr,+ "," ")"                          : rust_expr  -- tuple
@@ -596,6 +612,109 @@ macro_rules
   | `(rust_expr| & mut $e:rust_expr)          => `(term| Expr.reference Bool.false Bool.true  $(⟨e⟩))
   | `(rust_expr| & raw const $e:rust_expr)    => `(term| Expr.reference Bool.true  Bool.false $(⟨e⟩))
   | `(rust_expr| & raw mut   $e:rust_expr)    => `(term| Expr.reference Bool.true  Bool.true  $(⟨e⟩))
+
+  -- Try block
+  | `(rust_try_block| try $b:rust_block) =>
+      `(term| Expr.tryBlock $(⟨b⟩) Option.none)
+
+  -- Gen blocks
+  | `(rust_gen_block| gen $b:rust_block) =>
+      `(term| Expr.genBlock CaptureBy.ref_ $(⟨b⟩) GenBlockKind.gen)
+  | `(rust_gen_move_block| gen move $b:rust_block) =>
+      `(term| Expr.genBlock CaptureBy.value $(⟨b⟩) GenBlockKind.gen)
+
+  -- Yield
+  | `(rust_yield| yield) =>
+      `(term| Expr.yield_ Option.none YieldKind.prefix)
+  | `(rust_yield_expr| yield $e:rust_expr) =>
+      `(term| Expr.yield_ (Option.some $(⟨e⟩)) YieldKind.prefix)
+
+  -- Closure parameter elaboration
+  | `(rust_closure_param| $p:rust_pat) =>
+      `(term| ClosureParam.pat $(⟨p⟩))
+  | `(rust_closure_param| $p:rust_pat : $t:rust_ty) =>
+      `(term| ClosureParam.typed $(⟨p⟩) $(⟨t⟩))
+
+  -- Closures
+  | `(rust_expr| | $params,* | $[-> $ret:rust_ty]? $body:rust_expr) => do
+      let paramExprs ← params.getElems.mapM fun p => `(term| $(⟨p⟩))
+      let paramsList ← paramExprs.foldlM (fun acc e => `(term| List.cons $e $acc)) (← `(term| List.nil))
+      let retExpr ← match ret with
+        | some r => `(term| Option.some $(⟨r⟩))
+        | none => `(term| Option.none)
+      let bodyExpr ← match body with
+        | `(rust_expr| $b:rust_block) => `(term| ClosureBody.block $(⟨b⟩))
+        | _ => `(term| ClosureBody.expr $(⟨body⟩))
+      `(term| Expr.closure Bool.false CaptureBy.ref_ (List.reverse $paramsList) $retExpr $bodyExpr)
+
+  | `(rust_expr| move | $params,* | $[-> $ret:rust_ty]? $body:rust_expr) => do
+      let paramExprs ← params.getElems.mapM fun p => `(term| $(⟨p⟩))
+      let paramsList ← paramExprs.foldlM (fun acc e => `(term| List.cons $e $acc)) (← `(term| List.nil))
+      let retExpr ← match ret with
+        | some r => `(term| Option.some $(⟨r⟩))
+        | none => `(term| Option.none)
+      let bodyExpr ← match body with
+        | `(rust_expr| $b:rust_block) => `(term| ClosureBody.block $(⟨b⟩))
+        | _ => `(term| ClosureBody.expr $(⟨body⟩))
+      `(term| Expr.closure Bool.false CaptureBy.value (List.reverse $paramsList) $retExpr $bodyExpr)
+
+  | `(rust_expr| async | $params,* | $[-> $ret:rust_ty]? $body:rust_expr) => do
+      let paramExprs ← params.getElems.mapM fun p => `(term| $(⟨p⟩))
+      let paramsList ← paramExprs.foldlM (fun acc e => `(term| List.cons $e $acc)) (← `(term| List.nil))
+      let retExpr ← match ret with
+        | some r => `(term| Option.some $(⟨r⟩))
+        | none => `(term| Option.none)
+      let bodyExpr ← match body with
+        | `(rust_expr| $b:rust_block) => `(term| ClosureBody.block $(⟨b⟩))
+        | _ => `(term| ClosureBody.expr $(⟨body⟩))
+      `(term| Expr.closure Bool.true CaptureBy.ref_ (List.reverse $paramsList) $retExpr $bodyExpr)
+
+  | `(rust_expr| async move | $params,* | $[-> $ret:rust_ty]? $body:rust_expr) => do
+      let paramExprs ← params.getElems.mapM fun p => `(term| $(⟨p⟩))
+      let paramsList ← paramExprs.foldlM (fun acc e => `(term| List.cons $e $acc)) (← `(term| List.nil))
+      let retExpr ← match ret with
+        | some r => `(term| Option.some $(⟨r⟩))
+        | none => `(term| Option.none)
+      let bodyExpr ← match body with
+        | `(rust_expr| $b:rust_block) => `(term| ClosureBody.block $(⟨b⟩))
+        | _ => `(term| ClosureBody.expr $(⟨body⟩))
+      `(term| Expr.closure Bool.true CaptureBy.value (List.reverse $paramsList) $retExpr $bodyExpr)
+
+  | `(rust_expr| || $[-> $ret:rust_ty]? $body:rust_expr) => do
+      let retExpr ← match ret with
+        | some r => `(term| Option.some $(⟨r⟩))
+        | none => `(term| Option.none)
+      let bodyExpr ← match body with
+        | `(rust_expr| $b:rust_block) => `(term| ClosureBody.block $(⟨b⟩))
+        | _ => `(term| ClosureBody.expr $(⟨body⟩))
+      `(term| Expr.closure Bool.false CaptureBy.ref_ [] $retExpr $bodyExpr)
+
+  | `(rust_expr| move || $[-> $ret:rust_ty]? $body:rust_expr) => do
+      let retExpr ← match ret with
+        | some r => `(term| Option.some $(⟨r⟩))
+        | none => `(term| Option.none)
+      let bodyExpr ← match body with
+        | `(rust_expr| $b:rust_block) => `(term| ClosureBody.block $(⟨b⟩))
+        | _ => `(term| ClosureBody.expr $(⟨body⟩))
+      `(term| Expr.closure Bool.false CaptureBy.value [] $retExpr $bodyExpr)
+
+  | `(rust_expr| async || $[-> $ret:rust_ty]? $body:rust_expr) => do
+      let retExpr ← match ret with
+        | some r => `(term| Option.some $(⟨r⟩))
+        | none => `(term| Option.none)
+      let bodyExpr ← match body with
+        | `(rust_expr| $b:rust_block) => `(term| ClosureBody.block $(⟨b⟩))
+        | _ => `(term| ClosureBody.expr $(⟨body⟩))
+      `(term| Expr.closure Bool.true CaptureBy.ref_ [] $retExpr $bodyExpr)
+
+  | `(rust_expr| async move || $[-> $ret:rust_ty]? $body:rust_expr) => do
+      let retExpr ← match ret with
+        | some r => `(term| Option.some $(⟨r⟩))
+        | none => `(term| Option.none)
+      let bodyExpr ← match body with
+        | `(rust_expr| $b:rust_block) => `(term| ClosureBody.block $(⟨b⟩))
+        | _ => `(term| ClosureBody.expr $(⟨body⟩))
+      `(term| Expr.closure Bool.true CaptureBy.value [] $retExpr $bodyExpr)
 
 /-! ──────────────────────────────────────────────────────────────
     § 22  rust_literal → Literal

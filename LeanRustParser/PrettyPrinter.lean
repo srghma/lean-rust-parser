@@ -313,8 +313,8 @@ mutual
     | .become e          => Doc.text "become " ++ ppExpr e
     | .yeet none         => Doc.text "do yeet"
     | .yeet (some e)     => Doc.text "do yeet " ++ ppExpr e
-    | .closure static_ capture params ret body =>
-        (if static_ then Doc.text "static " else Doc.empty) ++
+    | .closure async_ capture params ret body =>
+        (if async_ then Doc.text "async " else Doc.empty) ++
         (match capture with
           | .value => Doc.text "move "
           | .use_  => Doc.text "use "

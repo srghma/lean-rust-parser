@@ -404,7 +404,7 @@ mutual
     | become     (e : Expr)                   -- `become f()` (tail calls, nightly)
     | yeet       (e : Option Expr)            -- `do yeet e` (nightly)
     -- Closures & blocks
-    | closure    (isStatic : Bool) (capture : CaptureBy) (params : List ClosureParam)
+    | closure    (isAsync : Bool) (capture : CaptureBy) (params : List ClosureParam)
                  (ret : Option Ty) (body : ClosureBody)
     | block      (b : Block)
     | unsafeBlock (b : Block)
