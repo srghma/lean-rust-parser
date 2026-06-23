@@ -1,0 +1,198 @@
+flowchart TD
+    %% Base & Paths
+    ScopedPath --> ScopedPath
+    ScopedPath --> Ty
+    ScopedPath --> TypeArgs
+
+    MacroInvocation --> ScopedPath
+
+    %% Type Arguments & Parameters
+    TypeArgs --> TypeArgItem
+
+    TypeArgItem --> Ty
+    TypeArgItem --> Expr
+    TypeArgItem --> TraitBound
+    TypeArgItem --> Block
+
+    TypeParams --> TypeParamItem
+
+    TypeParamItem --> Ty
+    TypeParamItem --> TraitBound
+    TypeParamItem --> ConstParamDefault
+
+    ConstParamDefault --> Block
+
+    %% Types
+    Ty --> Ty
+    Ty --> ScopedPath
+    Ty --> TypeArgs
+    Ty --> BareFnArg
+    Ty --> TraitBoundItem
+    Ty --> TypeParams
+    Ty --> Pat
+    Ty --> MacroInvocation
+
+    BareFnArg --> Ty
+
+    %% Traits & Bounds
+    TraitBound --> TraitBoundItem
+
+    TraitBoundItem --> Ty
+    TraitBoundItem --> PreciseCapturingArg
+
+    PreciseCapturingArg --> ScopedPath
+
+    WherePred --> Ty
+    WherePred --> TraitBound
+
+    ImplTrait --> Ty
+
+    %% Blocks & Statements
+    Block --> Stmt
+    Block --> Expr
+
+    Stmt --> Expr
+    Stmt --> Pat
+    Stmt --> Ty
+    Stmt --> Block
+    Stmt --> Item
+    Stmt --> MacroInvocation
+
+    %% Patterns
+    Pat --> Pat
+    Pat --> ScopedPath
+    Pat --> FieldPat
+    Pat --> RangePat
+    Pat --> Block
+    Pat --> Expr
+    Pat --> MacroInvocation
+
+    RangePat --> ScopedPath
+    FieldPat --> Pat
+
+    %% Expressions
+    Expr --> Expr
+    Expr --> ScopedPath
+    Expr --> Ty
+    Expr --> TypeArgs
+    Expr --> ClosureParam
+    Expr --> ClosureBody
+    Expr --> Block
+    Expr --> Condition
+    Expr --> ElseClause
+    Expr --> MatchArm
+    Expr --> Pat
+    Expr --> ArrayExprKind
+    Expr --> StructExprName
+    Expr --> FieldInit
+    Expr --> MacroInvocation
+    Expr --> InlineAsm
+
+    ArrayExprKind --> Expr
+    ClosureParam --> Pat
+    ClosureParam --> Ty
+    ClosureBody --> Expr
+    ClosureBody --> Block
+
+    Condition --> Expr
+    Condition --> Pat
+    Condition --> LetChainItem
+
+    LetChainItem --> Expr
+    LetChainItem --> Pat
+
+    ElseClause --> Block
+    ElseClause --> Expr
+
+    MatchArm --> Attribute
+    MatchArm --> Pat
+    MatchArm --> Condition
+    MatchArm --> Expr
+
+    StructExprName --> ScopedPath
+    StructExprName --> TypeArgs
+    StructExprName --> Ty
+
+    FieldInit --> Expr
+
+    %% Inline Assembly
+    InlineAsm --> InlineAsmOperand
+    InlineAsmOperand --> Expr
+    InlineAsmOperand --> ScopedPath
+    InlineAsmOperand --> Block
+
+    %% Items
+    Item --> Item
+    Item --> Attribute
+    Item --> ForeignItem
+    Item --> TypeParams
+    Item --> WherePred
+    Item --> StructBody
+    Item --> FieldDecl
+    Item --> EnumVariant
+    Item --> Ty
+    Item --> TraitBound
+    Item --> Param
+    Item --> Block
+    Item --> FnContract
+    Item --> EiiImpl
+    Item --> TraitItem
+    Item --> ImplTrait
+    Item --> ImplItem
+    Item --> Expr
+    Item --> MacroInvocation
+    Item --> ScopedPath
+
+    TraitItem --> Attribute
+    TraitItem --> TypeParams
+    TraitItem --> Param
+    TraitItem --> Ty
+    TraitItem --> WherePred
+    TraitItem --> Block
+    TraitItem --> TraitBound
+    TraitItem --> Expr
+    TraitItem --> MacroInvocation
+
+    ImplItem --> Attribute
+    ImplItem --> TypeParams
+    ImplItem --> Param
+    ImplItem --> Ty
+    ImplItem --> WherePred
+    ImplItem --> Block
+    ImplItem --> TraitBound
+    ImplItem --> Expr
+    ImplItem --> MacroInvocation
+
+    ForeignItem --> Attribute
+    ForeignItem --> TypeParams
+    ForeignItem --> Param
+    ForeignItem --> Ty
+    ForeignItem --> WherePred
+    ForeignItem --> MacroInvocation
+
+    %% Structs, Enums, & Fields
+    StructBody --> TupleField
+    StructBody --> FieldDecl
+
+    TupleField --> Attribute
+    TupleField --> Ty
+
+    FieldDecl --> Attribute
+    FieldDecl --> Ty
+
+    EnumVariant --> Attribute
+    EnumVariant --> StructBody
+    EnumVariant --> Expr
+
+    %% Attributes & Contracts
+    Attribute --> ScopedPath
+    Attribute --> AttrValue
+    AttrValue --> Expr
+
+    FnContract --> Stmt
+    FnContract --> Expr
+
+    EiiImpl --> ScopedPath
+
+    Param --> Pat
+    Param --> Ty
