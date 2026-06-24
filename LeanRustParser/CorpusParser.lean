@@ -20,23 +20,44 @@ def parseCorpusFile (src : String) : Except String SourceFile := Id.run do
     Item.fn_ [] none FnModifiers.none (Ident.mk "main") none [] none none
       (some emptyFnBody) none []
 
-  let rec loop (lines : List String) (skipNext : Bool) (acc : List Item) : Except String (List Item) :=
+  let braceDelta (s : String) : Int :=
+    s.toList.foldl
+      (fun acc c =>
+        if c = '{' then acc + 1
+        else if c = '}' then acc - 1
+        else acc) 0
+
+  let rec loop (lines : List String) (skip : Option Int) (acc : List Item) : Except String (List Item) :=
     match lines with
     | [] => .ok acc.reverse
     | line :: rest =>
         let trimmed := line.trimAscii.toString
         if trimmed.isEmpty || trimmed.startsWith "//" then
-          loop rest skipNext acc
+          loop rest skip acc
         else if trimmed == "#[cfg(false)]" then
-          loop rest true acc
-        else if skipNext then
-          loop rest false acc
-        else if trimmed == "fn main() {}" || trimmed == "pub fn main() {}" then
-          loop rest false (mainFn :: acc)
+          loop rest (some 0) acc
         else
-          .error s!"unsupported Rust snippet: {trimmed}"
+          match skip with
+          | some depth =>
+              let delta := braceDelta trimmed
+              if depth = 0 then
+                if delta > 0 then
+                  loop rest (some delta) acc
+                else
+                  loop rest none acc
+              else
+                let nextDepth := depth + delta
+                if nextDepth <= 0 then
+                  loop rest none acc
+                else
+                  loop rest (some nextDepth) acc
+          | none =>
+              if trimmed == "fn main() {}" || trimmed == "pub fn main() {}" then
+                loop rest none (mainFn :: acc)
+              else
+                .error s!"unsupported Rust snippet: {trimmed}"
 
-  match loop (src.splitOn "\n") false [] with
+  match loop (src.splitOn "\n") none [] with
   | .ok items => .ok (SourceFile.mk none [] items)
   | .error msg => .error msg
 

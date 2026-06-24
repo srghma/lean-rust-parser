@@ -31,4 +31,19 @@ static X: u8;
     | .ok sf => ppSourceFile sf
     | .error msg => s!"ERROR: {msg}",
     "fn main() {}")
+  ,
+  ("impl-item-fn-no-body-pass.rs",
+    match LeanRustParser.parseCorpusFile r#"
+//@ check-pass
+
+fn main() {}
+
+#[cfg(false)]
+impl X {
+    fn f();
+}
+"# with
+    | .ok sf => ppSourceFile sf
+    | .error msg => s!"ERROR: {msg}",
+    "fn main() {}")
 ]
