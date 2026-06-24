@@ -1,7 +1,7 @@
 module
 
 public import LeanRustParser.Basic.Mutual
-public import LeanRustParser.Basic.MutualRepr
+public import LeanRustParser.Basic.Mutual.Repr
 
 @[expose] public section
 
@@ -10,4 +10,4 @@ structure SourceFile where
   shebang : Option String
   attrs   : List Attribute
   items   : List Item
-  -- deriving Repr
+  deriving Repr, DecidableEq
