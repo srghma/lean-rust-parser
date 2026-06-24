@@ -1,5 +1,6 @@
 module
 
+public import LeanRustParser.Basic.NonMutual
 public import LeanRustParser.Basic.Mutual
 
 @[expose] public section

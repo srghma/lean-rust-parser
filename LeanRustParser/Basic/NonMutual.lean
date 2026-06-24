@@ -17,7 +17,7 @@ inductive PrimitiveType
   | u8 | i8 | u16 | i16 | u32 | i32 | u64 | i64
   | u128 | i128 | isize | usize | f16 | f32 | f64 | f128
   | bool_ | str_ | char_
-  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
 def PrimitiveType.toString : PrimitiveType → String
   | .u8    => "u8"    | .i8    => "i8"
@@ -33,21 +33,21 @@ def PrimitiveType.toString : PrimitiveType → String
 /-- An identifier (possibly raw `r#foo`). -/
 structure Ident where
   name : String
-  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
 instance : ToString Ident := ⟨(·.name)⟩
 
 /-- A lifetime `'a`. -/
 structure Lifetime where
   name : String   -- without the leading `'`
-  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
 def Lifetime.toString (l : Lifetime) : String := "'" ++ l.name
 
 /-- A label `'outer`. -/
 structure Label where
   name : String
-  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
 def Label.toString (l : Label) : String := "'" ++ l.name
 
@@ -55,7 +55,7 @@ def Label.toString (l : Label) : String := "'" ++ l.name
 inductive FragmentSpecifier
   | block | expr | expr2021 | ident | item | lifetime | literal
   | meta_ | pat | patParam | path | stmt | tt | ty | vis
-  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
 def FragmentSpecifier.toString : FragmentSpecifier → String
   | .block    => "block"    | .expr     => "expr"
@@ -76,7 +76,7 @@ inductive Visibility
   | pubSuper             -- `pub(super)`
   | pubIn (path : String) -- `pub(in path)`
   | crateKw              -- bare `crate` (old-style)
-  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
 def Visibility.toString : Visibility → String
   | .inherited  => ""
@@ -92,7 +92,7 @@ inductive BinOp
   | and | or | bitAnd | bitOr | bitXor
   | eq | ne | lt | le | gt | ge
   | shl | shr | add | sub | mul | div | rem
-  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
 def BinOp.toString : BinOp → String
   | .and    => "&&" | .or     => "||"
@@ -115,13 +115,13 @@ def CompoundOp.toString : CompoundOp → String
   | .orEq  => "|=" | .xorEq => "^=" | .shlEq => "<<=" | .shrEq => ">>="
 
 /-- Unary operators. -/
-inductive UnaryOp | neg | deref | not deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord
+inductive UnaryOp | neg | deref | not deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
 def UnaryOp.toString : UnaryOp → String
   | .neg => "-" | .deref => "*" | .not => "!"
 
 /-- Range operators. -/
-inductive RangeOp | exclusive | inclusive | dotDotDot deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord
+inductive RangeOp | exclusive | inclusive | dotDotDot deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
 def RangeOp.toString : RangeOp → String
   | .exclusive => ".." | .inclusive => "..=" | .dotDotDot => "..."
@@ -131,36 +131,36 @@ inductive CaptureBy
   | value   -- `move`
   | ref_    -- default (by reference)
   | use_    -- `use` (precise capturing, nightly)
-  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
 /-- The kind of generator block (rustc `GenBlockKind`). -/
 inductive GenBlockKind
   | async_    -- `async { ... }`
   | gen       -- `gen { ... }` (nightly)
   | asyncGen  -- `async gen { ... }` (nightly)
-  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
 /-- Whether a `match` is prefix or postfix (nightly postfix-match). -/
-inductive MatchKind | prefix | postfix deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord
+inductive MatchKind | prefix | postfix deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
 /-- Whether a `yield` is prefix or postfix. -/
-inductive YieldKind | prefix | postfix deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord
+inductive YieldKind | prefix | postfix deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
 /-- Whether a `for` loop is plain or `for await`. -/
-inductive ForLoopKind | for_ | forAwait deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord
+inductive ForLoopKind | for_ | forAwait deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
 /-- Unsafe binder cast direction. -/
-inductive UnsafeBinderCastKind | wrap | unwrap deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord
+inductive UnsafeBinderCastKind | wrap | unwrap deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
 /-- How a macro invocation statement is terminated. -/
 inductive MacStmtStyle
   | semicolon  -- `mac!(...);`
   | braces     -- `mac! { ... }` (no semicolon needed)
   | noBraces   -- `mac!(...)` used as expression statement
-  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
 /-- TraitBound modifier (e.g. `?Sized`). -/
-inductive TraitBoundModifier | none | maybe | maybeConst deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord
+inductive TraitBoundModifier | none | maybe | maybeConst deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
 
 /-- Literal values. -/
@@ -174,7 +174,7 @@ inductive Literal
   | char_   (raw : String)       -- `'a'`
   | byte_   (raw : String)       -- `b'x'`
   | bool_   (b : Bool)
-  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
 -- 1. Standalone types extracted from the mutual block
 -- These do not depend on the core cycle (Expr/Ty/Stmt/Item).
@@ -187,7 +187,7 @@ inductive FnModifiers
          (isUnsafe : Bool)
          (isDefault : Bool)
          (extABI : Option (Option String))  -- None = no extern; some none = bare extern; some (some "C") = extern "C"
-  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
 @[reducible] def FnModifiers.none : FnModifiers :=
   .mods Option.none false false false Option.none
@@ -197,12 +197,12 @@ inductive TokenTree
   | parens   (content : String)
   | brackets (content : String)
   | braces   (content : String)
-  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
 /-- A macro_rules rule: `pattern => body`. -/
 inductive MacroRule
   | mk (pattern : TokenTree) (body : TokenTree)
-  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
 /-- Use tree (import path). -/
 inductive UseTree
@@ -212,9 +212,13 @@ inductive UseTree
   | glob
   | list  (trees : List UseTree)
   | self_
-  deriving Repr, Inhabited, Ord --, DecidableEq, ReflBEq, LawfulBEq
+  deriving Repr, Inhabited, Ord, Hashable
 
-private noncomputable def UseTree.decEq (x y : UseTree) : Decidable (x = y) := by
+--, DecidableEq, ReflBEq, LawfulBEq -- underivable
+-- BEq - derivable, but better ourselves
+
+namespace UseTree
+noncomputable def decEq (x y : UseTree) : Decidable (x = y) := by
   cases x <;> cases y
   all_goals expose_names;
   · exact Classical.propDecidable (path seg child = path seg_1 child_1)
@@ -255,12 +259,11 @@ private noncomputable def UseTree.decEq (x y : UseTree) : Decidable (x = y) := b
   · exact Classical.propDecidable (self_ = list trees)
   · simp_all only
     exact instDecidableTrue
-end
 
-noncomputable instance : DecidableEq UseTree := UseTree.decEq
+noncomputable instance : DecidableEq UseTree := decEq
 
 mutual
-  def UseTree.beq : UseTree → UseTree → Bool
+  def beq : UseTree → UseTree → Bool
     | path seg1 child1, path seg2 child2 => seg1 == seg2 && beq child1 child2
     | name id1, name id2 => id1 == id2
     | alias id1 al1, alias id2 al2 => id1 == id2 && al1 == al2
@@ -269,16 +272,16 @@ mutual
     | self_, self_ => true
     | _, _ => false
 
-  def UseTree.list_beq : List UseTree → List UseTree → Bool
+  def list_beq : List UseTree → List UseTree → Bool
     | [], [] => true
     | t1 :: ts1, t2 :: ts2 => beq t1 t2 && list_beq ts1 ts2
     | _, _ => false
 end
 
 instance : BEq UseTree where
-  beq := UseTree.beq
+  beq := beq
 
-theorem UseTree.list_beq_eq (xs ys : List UseTree) : UseTree.list_beq xs ys = (xs == ys) := by
+theorem list_beq_eq (xs ys : List UseTree) : list_beq xs ys = (xs == ys) := by
   induction xs generalizing ys with
   | nil =>
     cases ys <;> rfl
@@ -286,12 +289,12 @@ theorem UseTree.list_beq_eq (xs ys : List UseTree) : UseTree.list_beq xs ys = (x
     cases ys with
     | nil => rfl
     | cons y ys =>
-      dsimp [BEq.beq, UseTree.beq, UseTree.list_beq]
+      dsimp [BEq.beq, beq, list_beq]
       rw [ih]
       rfl
 
 mutual
-  theorem UseTree.beq_self (x : UseTree) : (x == x) = true := by
+  theorem beq_self (x : UseTree) : (x == x) = true := by
     cases x with
     | path seg child =>
       change (seg == seg && child == child) = true
@@ -311,7 +314,7 @@ mutual
     | self_ =>
       rfl
 
-  theorem UseTree.list_beq_self (xs : List UseTree) : (xs == xs) = true := by
+  theorem list_beq_self (xs : List UseTree) : (xs == xs) = true := by
     cases xs with
     | nil => rfl
     | cons y ys =>
@@ -321,7 +324,7 @@ mutual
 end
 
 mutual
-  theorem UseTree.eq_of_beq_internal (x y : UseTree) (h : UseTree.beq x y = true) : x = y := by
+  theorem eq_of_beq_internal (x y : UseTree) (h : beq x y = true) : x = y := by
     cases x <;> cases y
     all_goals (try (dsimp [beq] at h; contradiction))
     · -- path / path
@@ -346,7 +349,7 @@ mutual
     · -- self / self
       rfl
 
-  theorem UseTree.list_eq_of_beq_internal (xs ys : List UseTree) (h : UseTree.list_beq xs ys = true) : xs = ys := by
+  theorem list_eq_of_beq_internal (xs ys : List UseTree) (h : list_beq xs ys = true) : xs = ys := by
     cases xs <;> cases ys
     all_goals (try (dsimp [list_beq] at h; contradiction))
     · rfl
@@ -360,11 +363,12 @@ end
 instance : LawfulBEq UseTree where
   eq_of_beq := by
     intro x y h
-    change UseTree.beq x y = true at h
-    exact UseTree.eq_of_beq_internal x y h
+    change beq x y = true at h
+    exact eq_of_beq_internal x y h
   rfl := by
     intro x
-    exact UseTree.beq_self x
+    exact beq_self x
 
 instance : ReflBEq UseTree where
-  rfl := by intro x; exact UseTree.beq_self x
+  rfl := by intro x; exact beq_self x
+end UseTree
