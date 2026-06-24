@@ -11,3 +11,5 @@ lets start from 1 such .rs file
 add a parser
 
 then test that it parses without errors at LeanRustParserTests/Main.lean
+
+parser should use https://leanprover-community.github.io/mathlib4_docs/Lean/Parser/Basic.html to parse text into LeanRustParser/Basic/SourceFile.lean
