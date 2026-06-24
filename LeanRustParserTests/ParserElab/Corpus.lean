@@ -18,4 +18,17 @@ const X: u8;
     | .ok sf => ppSourceFile sf
     | .error msg => s!"ERROR: {msg}",
     "fn main() {}")
+  ,
+  ("item-free-static-no-body-syntactic-pass.rs",
+    match LeanRustParser.parseCorpusFile r#"
+//@ check-pass
+
+fn main() {}
+
+#[cfg(false)]
+static X: u8;
+"# with
+    | .ok sf => ppSourceFile sf
+    | .error msg => s!"ERROR: {msg}",
+    "fn main() {}")
 ]
