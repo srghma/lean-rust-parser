@@ -1,5 +1,7 @@
 module
 
+public import LeanRustParser.CorpusParser
+public import LeanRustParserTests.ParserElab.Corpus
 public import LeanRustParserTests.ParserElab.Async
 public import LeanRustParserTests.ParserElab.Declarations
 public import LeanRustParserTests.ParserElab.Expressions
@@ -13,6 +15,7 @@ public import LeanRustParserTests.ParserElab.Types
 
 def tests := [
   ("Async", asyncTests),
+  ("Corpus", corpusTests),
   ("Declarations", declarationsTests),
   ("Expressions", expressionsTests),
   ("Literals", literalsTests),
