@@ -7,6 +7,7 @@ module
 public import LeanRustParser.Basic.NonMutual
 public import LeanRustParser.Basic.Mutual
 public import LeanRustParser.Basic.SourceFile
+public import LeanRustParser.Basic.TokenFunctions
 public import LeanRustParser.Doc
 
 @[expose] public section
@@ -43,10 +44,75 @@ def ppVisOpt (vis : Option Visibility) : Doc :=
       let d := ppVisibility v
       if v == .inherited then Doc.empty else d ++ Doc.text " "
 
-def ppTokenTree : TokenTree → Doc
-    | .parens   c => Doc.text "(" ++ Doc.text c ++ Doc.text ")"
-    | .brackets c => Doc.text "[" ++ Doc.text c ++ Doc.text "]"
-    | .braces   c => Doc.text "{" ++ Doc.text c ++ Doc.text "}"
+def tokenStartsWord : Token → Bool
+  | .ident _ _ | .ntIdent _ _ | .lifetime _ _ | .ntLifetime _ _ | .literal _ => true
+  | _ => false
+
+def tokenTreeFirstToken? : TokenTree → Option Token
+  | .token token _ => some token
+  | .delimited _ _ _ => none
+
+def tokenTreeTrailingSpacing : TokenTree → Spacing
+  | .token _ spacing => spacing
+  | .delimited spacing _ _ => spacing.close
+
+/-- Emit the minimum separator needed for the lexer to reconstruct the same
+token boundary and rustc `Spacing`. -/
+def ppTokenTreeSeparator (left right : TokenTree) : Doc :=
+  let needsSpaceAfter : Token → Bool
+    | .rArrow | .comma | .plus | .star | .slash | .percent => true
+    | _ => false
+  let needsSpaceBefore : Token → Bool
+    | .plus | .star | .slash | .percent => true
+    | _ => false
+  match left, right with
+  | .token leftToken _, .delimited _ .parenthesis _ =>
+      if leftToken.spelling == "as" then Doc.text " " else Doc.empty
+  | _, _ => match left, tokenTreeFirstToken? right with
+  | .token leftToken _, some rightToken =>
+      if (leftToken == .or && rightToken.spelling != "_") ||
+          (leftToken == .colon && rightToken.spelling == "fn") ||
+          leftToken.spelling == "as" || rightToken.spelling == "as" ||
+          needsSpaceAfter leftToken || needsSpaceBefore rightToken then Doc.text " " else
+      if tokenTreeTrailingSpacing left != .alone then Doc.empty else
+      if (leftToken.isPunctuation && rightToken.isPunctuation) ||
+          (!leftToken.isPunctuation && rightToken.isPunctuation) ||
+          (tokenStartsWord leftToken && tokenStartsWord rightToken)
+      then Doc.text " " else Doc.empty
+    | .delimited _ _ _, some rightToken =>
+        if tokenTreeTrailingSpacing left == .alone && rightToken.isPunctuation
+        then Doc.text " " else Doc.empty
+    | _, none => Doc.empty
+
+def ppDelimiterOpeningSeparator (spacing : Spacing) (tokens : TokenStream) : Doc :=
+  if spacing == Spacing.alone && (tokens.head?.bind tokenTreeFirstToken? |>.map Token.isPunctuation |>.getD false)
+  then Doc.text " " else Doc.empty
+
+mutual
+  partial def ppTokenStream : TokenStream → Doc
+    | [] => Doc.empty
+    | tree :: rest =>
+        ppTokenTree tree ++
+        (rest.head?.map (ppTokenTreeSeparator tree) |>.getD Doc.empty) ++
+        ppTokenStream rest
+
+  partial def ppTokenTree : TokenTree → Doc
+    | .token token _ => Doc.text token.spelling
+    | .delimited spacing delimiter tokens =>
+        let (open_, close) := match delimiter with
+          | .parenthesis => ("(", ")")
+          | .brace => ("{", "}")
+          | .bracket => ("[", "]")
+          | .invisible _ => ("", "")
+        match delimiter, tokens with
+        | .brace, [] => Doc.text "{}"
+        | .brace, [.delimited _ .brace _] =>
+            Doc.text open_ ++ ppTokenStream tokens ++ Doc.text close
+        | .brace, _ =>
+            Doc.braced open_ close (ppTokenStream tokens)
+        | _, _ =>
+            Doc.text open_ ++ ppDelimiterOpeningSeparator spacing.open_ tokens ++ ppTokenStream tokens ++ Doc.text close
+end
 
 def ppMacroRule : MacroRule → Doc
     | .mk pat body =>
@@ -73,7 +139,7 @@ def ppFnModifiers : FnModifiers → Doc
         (if unsafe_  then Doc.text "unsafe "  else Doc.empty) ++
         (match extern_ with
           | none          => Doc.empty
-          | some none     => Doc.text "extern "
+          | some none     => Doc.text "extern \"C\" "
           | some (some a) => Doc.text s!"extern \"{a}\" ")
 
 set_option maxHeartbeats 2000000
@@ -168,8 +234,8 @@ mutual
     | .never               => Doc.text "!"
     | .infer               => Doc.text "_"
     | .paren inner         => Doc.text "(" ++ ppTy inner ++ Doc.text ")"
-    | .fn_ _mods params ret =>
-        Doc.text "fn(" ++ Doc.commaList (params.map ppBareFnArg) ++ Doc.text ")" ++
+    | .fn_ mods params ret =>
+        ppFnModifiers mods ++ Doc.text "fn(" ++ Doc.commaList (params.map ppBareFnArg) ++ Doc.text ")" ++
         (ret.map (fun r => Doc.text " -> " ++ ppTy r) |>.getD Doc.empty)
     | .implTrait bs        =>
         Doc.text "impl " ++ Doc.join (Doc.text " + ") (bs.map ppTraitBoundItem)
@@ -205,21 +271,30 @@ mutual
           let body := Doc.join Doc.nl bodyDocs
           lbl ++ Doc.braced "{" "}" body
 
+  partial def ppInlineBlock : Block → Doc
+    | .mk label stmts tail =>
+      let lbl := label.map (fun l => ppLabel l ++ Doc.text ": ") |>.getD Doc.empty
+      let bodyDocs := stmts.map ppStmt ++ (tail.map ppExpr).toList
+      if bodyDocs.isEmpty then
+          lbl ++ Doc.text "{}"
+      else
+          lbl ++ Doc.text "{ " ++ Doc.join (Doc.text " ") bodyDocs ++ Doc.text " }"
+
   partial def ppStmt : Stmt → Doc
     | .empty          => Doc.text ";"
     | .expr e         => ppExpr e
     | .semi e         => ppExpr e ++ Doc.text ";"
     | .item it        => ppItem it
-    | .macCall mac st =>
-        ppMacroInv mac ++
-        (match st with | .semicolon => Doc.text ";" | .braces => Doc.empty | .noBraces => Doc.text ";")
-    | .let_ mut_ pat ty init else_ =>
-        Doc.text "let " ++
-        (if mut_ then Doc.text "mut " else Doc.empty) ++
-        ppPat pat ++
-        (ty.map (fun t => Doc.text ": " ++ ppTy t) |>.getD Doc.empty) ++
-        (init.map (fun v => Doc.text " = " ++ ppExpr v) |>.getD Doc.empty) ++
-        (else_.map (fun b => Doc.text " else " ++ ppBlock b) |>.getD Doc.empty) ++
+    | .macCall stmt =>
+        ppAttrs stmt.attrs ++ ppMacroInv stmt.mac ++
+        (match stmt.style with | .semicolon => Doc.text ";" | .braces => Doc.empty | .noBraces => Doc.text ";")
+    | .let_ local_ =>
+        ppAttrs local_.attrs ++ Doc.text "let " ++
+        (if local_.mutbl then Doc.text "mut " else Doc.empty) ++
+        ppPat local_.pat ++
+        (local_.ty.map (fun t => Doc.text ": " ++ ppTy t) |>.getD Doc.empty) ++
+        (local_.init.map (fun v => Doc.text " = " ++ ppExpr v) |>.getD Doc.empty) ++
+        (local_.else_.map (fun b => Doc.text " else " ++ ppBlock b) |>.getD Doc.empty) ++
         Doc.text ";"
 
   partial def ppPat : Pat → Doc
@@ -276,6 +351,9 @@ mutual
     | .remaining => Doc.text ".."
 
   partial def ppExpr : Expr → Doc
+    | .mk attrs kind => ppAttrs attrs ++ ppExprKind kind
+
+  partial def ppExprKind : ExprKind → Doc
     | .literal l         => ppLiteral l
     | .ident id          => ppIdent id
     | .primitive p       => Doc.text p.toString
@@ -285,7 +363,7 @@ mutual
     | .infer             => Doc.text "_"
     | .unary op e        => Doc.text op.toString ++ ppExpr e
     | .binary op l r     =>
-        Doc.text "(" ++ ppExpr l ++ Doc.text s!" {op.toString} " ++ ppExpr r ++ Doc.text ")"
+        ppExpr l ++ Doc.text s!" {op.toString} " ++ ppExpr r
     | .assign l r        => ppExpr l ++ Doc.text " = " ++ ppExpr r
     | .compoundAssign op l r =>
         ppExpr l ++ Doc.text s!" {op.toString} " ++ ppExpr r
@@ -322,8 +400,8 @@ mutual
         Doc.text "|" ++ Doc.commaList (params.map ppClosureParam) ++ Doc.text "|" ++
         (ret.map (fun t => Doc.text " -> " ++ ppTy t) |>.getD Doc.empty) ++
         Doc.text " " ++ ppClosureBody body
-    | .block b           => ppBlock b
-    | .unsafeBlock b     => Doc.text "unsafe " ++ ppBlock b
+    | .block b           => ppInlineBlock b
+    | .unsafeBlock b     => Doc.text "unsafe " ++ ppInlineBlock b
     | .genBlock capture b kind =>
         (match kind with
           | .async_    => Doc.text "async "
@@ -333,11 +411,11 @@ mutual
           | .value => Doc.text "move "
           | .use_  => Doc.text "use "
           | .ref_  => Doc.empty) ++
-        ppBlock b
-    | .tryBlock b _ty     => Doc.text "try " ++ ppBlock b
-    | .constBlock b      => Doc.text "const " ++ ppBlock b
+        ppInlineBlock b
+    | .tryBlock b _ty     => Doc.text "try " ++ ppInlineBlock b
+    | .constBlock b      => Doc.text "const " ++ ppInlineBlock b
     | .if_ cond then_ else_ =>
-        Doc.text "if " ++ ppCondition cond ++ Doc.text " " ++ ppBlock then_ ++
+        Doc.text "if " ++ ppCondition cond ++ Doc.text " " ++ ppInlineBlock then_ ++
         (else_.map (fun e => Doc.text " " ++ ppElseClause e) |>.getD Doc.empty)
     | .match_ val arms kind =>
         (match kind with | .prefix => Doc.empty | .postfix => ppExpr val ++ Doc.text ".") ++
@@ -347,14 +425,14 @@ mutual
         Doc.braced "{" "}" (Doc.join Doc.nl (arms.map ppMatchArm))
     | .while_ lbl cond body =>
         (lbl.map (fun l => ppLabel l ++ Doc.text ": ") |>.getD Doc.empty) ++
-        Doc.text "while " ++ ppCondition cond ++ Doc.text " " ++ ppBlock body
+        Doc.text "while " ++ ppCondition cond ++ Doc.text " " ++ ppInlineBlock body
     | .loop_ lbl body =>
         (lbl.map (fun l => ppLabel l ++ Doc.text ": ") |>.getD Doc.empty) ++
-        Doc.text "loop " ++ ppBlock body
+        Doc.text "loop " ++ ppInlineBlock body
     | .for_ lbl pat iter body kind =>
         (lbl.map (fun l => ppLabel l ++ Doc.text ": ") |>.getD Doc.empty) ++
         (match kind with | .for_ => Doc.text "for " | .forAwait => Doc.text "for await ") ++
-        ppPat pat ++ Doc.text " in " ++ ppExpr iter ++ Doc.text " " ++ ppBlock body
+        ppPat pat ++ Doc.text " in " ++ ppExpr iter ++ Doc.text " " ++ ppInlineBlock body
     | .return_ none      => Doc.text "return"
     | .return_ (some v)  => Doc.text "return " ++ ppExpr v
     | .yield_ none kind  =>
@@ -376,7 +454,9 @@ mutual
     | .array (.repeat e len) =>
         Doc.text "[" ++ ppExpr e ++ Doc.text "; " ++ ppExpr len ++ Doc.text "]"
     | .tuple elems       =>
-        Doc.text "(" ++ Doc.commaList (elems.map ppExpr) ++ Doc.text ",)"
+        match elems with
+        | [elem] => Doc.text "(" ++ ppExpr elem ++ Doc.text ",)"
+        | _ => Doc.text "(" ++ Doc.commaList (elems.map ppExpr) ++ Doc.text ")"
     | .unit              => Doc.text "()"
     | .struct_ name flds base =>
         ppStructExprName name ++ Doc.text " { " ++
@@ -416,7 +496,7 @@ mutual
           | .let_ pat val => Doc.text "let " ++ ppPat pat ++ Doc.text " = " ++ ppExpr val)
 
   partial def ppElseClause : ElseClause → Doc
-    | .block b  => Doc.text "else " ++ ppBlock b
+    | .block b  => Doc.text "else " ++ ppInlineBlock b
     | .elseIf e => Doc.text "else " ++ ppExpr e
 
   partial def ppMatchArm : MatchArm → Doc
@@ -523,17 +603,32 @@ mutual
         (disc.map (fun e => Doc.text " = " ++ ppExpr e) |>.getD Doc.empty)
 
   partial def ppAttribute : Attribute → Doc
-    | .normal inner path value =>
-        Doc.text (if inner then "#![" else "#[") ++
-        ppScopedPath path ++
-        (value.map ppAttrValue |>.getD Doc.empty) ++
-        Doc.text "]"
-    | .docComment inner content =>
-        Doc.text (if inner then "//!" else "///") ++ Doc.text content
+    | .mk (.normal normal) style =>
+        Doc.text (if style == .inner then "#![" else "#[") ++
+        ppScopedPath normal.item.path ++ ppAttrItemKind normal.item.args ++ Doc.text "]"
+    | .mk (.docComment kind content) style =>
+        match kind, style with
+        | .line, .outer => Doc.text "///" ++ Doc.text content
+        | .line, .inner => Doc.text "//!" ++ Doc.text content
+        | .block, .outer => Doc.text "/**" ++ Doc.text content ++ Doc.text "*/"
+        | .block, .inner => Doc.text "/*!" ++ Doc.text content ++ Doc.text "*/"
 
-  partial def ppAttrValue : AttrValue → Doc
-    | .eq e    => Doc.text " = " ++ ppExpr e
-    | .args tt => ppTokenTree tt
+  partial def ppAttrItemKind : AttrItemKind → Doc
+    | .unparsed args => ppAttrArgs args
+
+  partial def ppAttrArgs : AttrArgs → Doc
+    | .empty => Doc.empty
+    | .eq expr => Doc.text " = " ++ ppExpr expr
+    | .delimited args => ppDelimArgs args
+
+  partial def ppDelimArgs : DelimArgs → Doc
+    | .mk delimiter tokens =>
+        let (open_, close) := match delimiter with
+          | .parenthesis => ("(", ")")
+          | .brace => ("{", "}")
+          | .bracket => ("[", "]")
+          | .invisible _ => ("", "")
+        Doc.text open_ ++ ppTokenStream tokens ++ Doc.text close
 
   partial def ppImplTrait : ImplTrait → Doc
     | .positive ty => ppTy ty ++ Doc.text " for "
@@ -633,7 +728,7 @@ mutual
         ppAttrs attrs ++
         (if unsafe_ then Doc.text "unsafe " else Doc.empty) ++
         Doc.text "extern" ++
-        (abi.map (fun a => Doc.text s!" \"{a}\"") |>.getD Doc.empty) ++
+        Doc.text s!" \"{abi.getD "C"}\"" ++
         Doc.text " " ++
         Doc.braced "{" "}" (Doc.join Doc.nl (items.map ppForeignItem))
     | .struct_ attrs vis name tps where_ body =>
@@ -643,7 +738,7 @@ mutual
         (tps.map ppTypeParams |>.getD Doc.empty) ++
         (where_.map ppWherePreds |>.getD Doc.empty) ++
         ppStructBody body ++
-        Doc.text ";"
+        (match body with | .record _ => Doc.empty | _ => Doc.text ";")
     | .union_ attrs vis name tps where_ fields =>
         ppAttrs attrs ++
         ppVisOpt vis ++
@@ -703,16 +798,19 @@ mutual
         Doc.text " " ++
         Doc.braced "{" "}" (Doc.join Doc.nl (items.map ppTraitItem))
     | .impl_ attrs unsafe_ tps traitRef ty where_ items =>
-        ppAttrs attrs ++
-        (if unsafe_ then Doc.text "unsafe " else Doc.empty) ++
-        Doc.text "impl" ++
-        (tps.map ppTypeParams |>.getD Doc.empty) ++
-        Doc.text " " ++
-        (traitRef.map ppImplTrait |>.getD Doc.empty) ++
-        ppTy ty ++
-        (where_.map ppWherePreds |>.getD Doc.empty) ++
-        Doc.text " " ++
-        Doc.braced "{" "}" (Doc.join Doc.nl (items.map ppImplItem))
+        match ty with
+        | .err => ppAttrs attrs ++ Doc.text "impl {}"
+        | _ =>
+            ppAttrs attrs ++
+            (if unsafe_ then Doc.text "unsafe " else Doc.empty) ++
+            Doc.text "impl" ++
+            (tps.map ppTypeParams |>.getD Doc.empty) ++
+            Doc.text " " ++
+            (traitRef.map ppImplTrait |>.getD Doc.empty) ++
+            ppTy ty ++
+            (where_.map ppWherePreds |>.getD Doc.empty) ++
+            Doc.text " " ++
+            Doc.braced "{" "}" (Doc.join Doc.nl (items.map ppImplItem))
     | .assocType attrs name tps bounds where_ default_ =>
         ppAttrs attrs ++
         Doc.text "type " ++ ppIdent name ++
@@ -728,7 +826,7 @@ mutual
         (val.map (fun v => Doc.text " = " ++ ppExpr v) |>.getD Doc.empty) ++
         Doc.text ";"
     | .constBlock b =>
-        Doc.text "const " ++ ppBlock b ++ Doc.text ";"
+        Doc.text "const " ++ ppBlock b
     | .static_ attrs vis mut_ name ty val _eii =>
         ppAttrs attrs ++
         ppVisOpt vis ++
@@ -751,7 +849,7 @@ mutual
     | .macro_ inv            => ppMacroInv inv ++ Doc.text ";"
     | .macroDef name rules   =>
         Doc.text "macro_rules! " ++ ppIdent name ++ Doc.text " " ++
-        Doc.braced "{" "}" (Doc.join Doc.nl (rules.map ppMacroRule))
+        Doc.braced "{" "}" (Doc.join (Doc.text ";" ++ Doc.nl) (rules.map ppMacroRule))
     | .globalAsm asm         =>
         Doc.text "global_asm!(" ++ ppInlineAsm asm ++ Doc.text ");"
     | .delegation attrs vis id target rename body =>
@@ -776,6 +874,6 @@ def ppSourceFile (sf : SourceFile) : String :=
   let shebang := sf.shebang.map (· ++ "\n") |>.getD ""
   let attrStr := if sf.attrs.isEmpty then ""
     else String.intercalate "\n" (sf.attrs.map (fun a => Doc.toString (ppAttribute a))) ++ "\n"
-  let items := String.intercalate "\n\n"
+  let items := String.intercalate "\n"
                  (sf.items.map (fun it => Doc.toString (ppItem it)))
-  shebang ++ attrStr ++ items
+  shebang ++ attrStr ++ items ++ if items.isEmpty then "" else "\n"

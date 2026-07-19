@@ -103,8 +103,10 @@ mutual
     | arg      (p : ScopedPath)
 
   /-- A braced block `{ stmt* expr? }`. -/
-  inductive Block
-    | mk (label : Option Label) (stmts : List Stmt) (tail : Option Expr)
+  structure Block where
+    label : Option Label
+    stmts : List Stmt
+    tail : Option Expr
 
 
   /-- A where-clause predicate. -/
@@ -167,8 +169,13 @@ mutual
     | full      (byRef mutbl : Bool) (name : Ident) (pat : Pat)
     | remaining
 
-  /-- Expressions. -/
-  inductive Expr
+  /-- `rustc_ast::Expr`: attributes belong to the expression, not its statement. -/
+  structure Expr where
+    attrs : List Attribute
+    kind : ExprKind
+
+  /-- `rustc_ast::ExprKind`. -/
+  inductive ExprKind
     -- Literals & paths
     | literal    (l : Literal)
     | ident      (id : Ident)
@@ -228,7 +235,7 @@ mutual
     -- Generics & macros
     | genericFn  (fn_ : Expr) (args : TypeArgs)
     | macro_     (inv : MacroInvocation)
-    | formatArgs (tt : TokenTree)             -- `format_args!(...)`
+    | formatArgs (tt : MacroRuleTokenTree)    -- `format_args!(...)`
     -- Assembly & builtins
     | inlineAsm  (asm : InlineAsm)
     | offsetOf   (ty : Ty) (fields : List Ident)      -- `offset_of!(T, f)`
@@ -266,8 +273,11 @@ mutual
     | block  (b : Block)
     | elseIf (e : Expr)
 
-  inductive MatchArm
-    | mk (attrs : List Attribute) (pat : Pat) (guard : Option Condition) (val : Expr)
+  structure MatchArm where
+    attrs : List Attribute
+    pat : Pat
+    guard : Option Condition
+    val : Expr
 
   inductive StructExprName
     | named      (id : Ident)
@@ -279,27 +289,47 @@ mutual
     | shorthand (id : Ident)
     | full      (field : Ident) (val : Expr)
 
-  /-- A statement. Mirrors rustc's `StmtKind` exactly. -/
+  /-- `rustc_ast::Local`. -/
+  structure Local where
+    attrs : List Attribute
+    mutbl : Bool
+    pat : Pat
+    ty : Option Ty
+    init : Option Expr
+    else_ : Option Block
+
+  /-- `rustc_ast::MacCallStmt`. -/
+  structure MacroCallStmt where
+    attrs : List Attribute
+    mac : MacroInvocation
+    style : MacStmtStyle
+
+  /-- Joint representation of `rustc_ast::Stmt` and `rustc_ast::StmtKind`.
+  Rust's outer `Stmt` contributes only node id and span, both intentionally
+  omitted here, so a separate wrapper would add no information. -/
   inductive Stmt
     | expr    (e : Expr)                       -- expression without trailing `;`
     | semi    (e : Expr)                       -- expression with trailing `;`
-    | let_    (mutbl : Bool) (pat : Pat) (ty : Option Ty)
-              (init : Option Expr) (else_ : Option Block)
+    | let_    (_local : Local)
     | item    (it : Item)
-    | macCall (mac : MacroInvocation) (style : MacStmtStyle)
+    | macCall (stmt : MacroCallStmt)
     | empty
 
   /-- A macro invocation `path!(tokens)`. -/
-  inductive MacroInvocation
-    | mk (path : ScopedPath) (tokens : TokenTree)
+  structure MacroInvocation where
+    path : ScopedPath
+    tokens : MacroRuleTokenTree
 
   /-- Externally implementable items mappings. -/
-  inductive EiiImpl
-    | mk (path : ScopedPath) (isDefault : Bool)
+  structure EiiImpl where
+    path : ScopedPath
+    isDefault : Bool
 
   /-- Contract logic for function definitions. -/
-  inductive FnContract
-    | mk (decls : List Stmt) (requires : Option Expr) (ensures : Option Expr)
+  structure FnContract where
+    decls : List Stmt
+    requires : Option Expr
+    ensures : Option Expr
 
   /-- Minimal subset of Inline Assembly operands. -/
   inductive InlineAsmOperand
@@ -312,8 +342,9 @@ mutual
     | label_     (block : Block)
 
   /-- Inline assembly expression. -/
-  inductive InlineAsm
-    | mk (template : List String) (operands : List InlineAsmOperand)
+  structure InlineAsm where
+    template : List String
+    operands : List InlineAsmOperand
 
   /-- Top-level items. -/
   inductive Item
@@ -434,23 +465,58 @@ mutual
     | tuple  (fields : List TupleField)
     | record (fields : List FieldDecl)
 
-  inductive TupleField
-    | mk (attrs : List Attribute) (vis : Option Visibility) (ty : Ty)
+  structure TupleField where
+    attrs : List Attribute
+    vis : Option Visibility
+    ty : Ty
 
-  inductive FieldDecl
-    | mk (attrs : List Attribute) (vis : Option Visibility) (name : Ident) (ty : Ty)
+  structure FieldDecl where
+    attrs : List Attribute
+    vis : Option Visibility
+    name : Ident
+    ty : Ty
 
-  inductive EnumVariant
-    | mk (attrs : List Attribute) (vis : Option Visibility)
-         (name : Ident) (body : StructBody) (disc : Option Expr)
+  structure EnumVariant where
+    attrs : List Attribute
+    vis : Option Visibility
+    name : Ident
+    body : StructBody
+    disc : Option Expr
 
-  /-- An attribute `#[…]` or `#![…]`. -/
-  inductive Attribute
-    | normal     (inner : Bool) (path : ScopedPath) (value : Option AttrValue)
-    | docComment (inner : Bool) (content : String)
+  /-- `rustc_ast::DelimArgs`, without delimiter spans. -/
+  structure DelimArgs where
+    delimiter : Delimiter
+    tokens : MacroRuleTokenStream
 
-  inductive AttrValue
-    | eq    (e : Expr)
-    | args  (tt : TokenTree)
+  /-- `rustc_ast::AttrArgs`, without the `=` span. -/
+  inductive AttrArgs
+    | empty
+    | delimited (args : DelimArgs)
+    | eq (expr : Expr)
+
+  /-- `rustc_ast::AttrItemKind` for syntax-level attributes.
+  `Parsed(EarlyParsedAttribute)` is a rustc performance cache, not source AST,
+  so this tree retains only its `Unparsed` form. -/
+  inductive AttrItemKind
+    | unparsed (args : AttrArgs)
+
+  /-- `rustc_ast::AttrItem`, without unsafe marker or cached tokens. -/
+  structure AttrItem where
+    path : ScopedPath
+    args : AttrItemKind
+
+  /-- `rustc_ast::NormalAttr`, without cached tokens. -/
+  structure NormalAttr where
+    item : AttrItem
+
+  /-- `rustc_ast::AttrKind`. -/
+  inductive AttrKind
+    | normal (attr : NormalAttr)
+    | docComment (kind : CommentKind) (symbol : String)
+
+  /-- `rustc_ast::Attribute`, without ID, span, or cached tokens. -/
+  structure Attribute where
+    kind : AttrKind
+    style : AttrStyle
 
 end  -- mutual
