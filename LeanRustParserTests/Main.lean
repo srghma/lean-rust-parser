@@ -1,14 +1,14 @@
 module
 
-public import LeanRustParserTests.ParserElab.Async
-public import LeanRustParserTests.ParserElab.Declarations
-public import LeanRustParserTests.ParserElab.Expressions
-public import LeanRustParserTests.ParserElab.Literals
-public import LeanRustParserTests.ParserElab.Macros
-public import LeanRustParserTests.ParserElab.Patterns
-public import LeanRustParserTests.ParserElab.SourceFiles
-public import LeanRustParserTests.ParserElab.Types
-public import LeanRustParser.RustParser
+-- public import LeanRustParserTests.ParserElab.Async
+-- public import LeanRustParserTests.ParserElab.Declarations
+-- public import LeanRustParserTests.ParserElab.Expressions
+-- public import LeanRustParserTests.ParserElab.Literals
+-- public import LeanRustParserTests.ParserElab.Macros
+-- public import LeanRustParserTests.ParserElab.Patterns
+-- public import LeanRustParserTests.ParserElab.SourceFiles
+-- public import LeanRustParserTests.ParserElab.Types
+public import LeanRustParser.Parser
 public import LeanRustParser.PrettyPrinter
 
 @[expose] public section
@@ -16,16 +16,20 @@ public import LeanRustParser.PrettyPrinter
 open System
 open LeanRustParser
 
-def tests := [
-  ("Async", asyncTests),
-  ("Declarations", declarationsTests),
-  ("Expressions", expressionsTests),
-  ("Literals", literalsTests),
-  ("Macros", macrosTests),
-  ("Patterns", patternsTests),
-  ("SourceFiles", sourceFilesTests),
-  ("Types", typesTests),
-]
+-- def tests := [
+--   ("Async", asyncTests),
+--   ("Declarations", declarationsTests),
+--   ("Expressions", expressionsTests),
+--   ("Literals", literalsTests),
+--   ("Macros", macrosTests),
+--   ("Patterns", patternsTests),
+--   ("SourceFiles", sourceFilesTests),
+--   ("Types", typesTests),
+-- ]
+
+/-! ParserElab regression modules deliberately have their own targets.  The
+source-fixture driver below must remain independent so `--only` does not build
+unrelated DSL regression code before executing the requested Rust fixture. -/
 
 def runTests (tests : List (String × String × String)) : IO Bool := do
   let mut allOk := true
@@ -354,14 +358,15 @@ def main (args : List String) : IO UInt32 := do
   let only := onlyFromArgs args
   let except := exceptFromArgs args
   let upToStage := upToStageFromArgs args
-  let allOk ← if compactOutput then
-    pure true
-  else
-    tests.foldlM (fun acc (name, tests) => do
-      IO.println s!"=== {name} ==="
-      let ok ← runTests tests
-      return acc && ok
-    ) true
+  -- let allOk ← if compactOutput then
+  --   pure true
+  -- else
+  --   tests.foldlM (fun acc (name, tests) => do
+  --     IO.println s!"=== {name} ==="
+  --     let ok ← runTests tests
+  --     return acc && ok
+  --   ) true
+  let allOk := true
   report compactOutput s!"=== Rust file parser; up to {rustParserStageName upToStage} ==="
   let fileParserOk ← runRustFileParserTests upToStage skipAlreadyPassed stopOnFirstError compactOutput only except
   let allOk := allOk && fileParserOk

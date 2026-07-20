@@ -15,10 +15,17 @@ public import Lean
 public import LeanRustParser.Basic.NonMutual
 public import LeanRustParser.Basic.Mutual
 public import LeanRustParser.Basic.SourceFile
+public import LeanRustParser.PrettyPrinter
 
 @[expose] public section
 
 open Lean
+
+/-- Construct the migrated `rustc_ast::Fn` ownership shape used by the
+term-level Rust syntax elaborator. -/
+def elabFnItem (vis : Visibility) (header : FnHeader) (ident : _root_.Ident)
+    (inputs : List Param) (output : Option Ty) (body : Block) : Item :=
+  .fn_ [] vis ⟨.implicit, ident, ⟨[], ⟨false, []⟩⟩, ⟨header, ⟨inputs, output⟩⟩, none, some body⟩
 
 /-! ──────────────────────────────────────────────────────────────
     § 1  Syntax categories
@@ -37,7 +44,7 @@ declare_syntax_cat rust_vis           -- Visibility
 declare_syntax_cat rust_generics      -- TypeParams
 declare_syntax_cat rust_where         -- WherePred list
 declare_syntax_cat rust_use_tree      -- UseTree
-declare_syntax_cat rust_field_init    -- FieldInit
+declare_syntax_cat rust_field_init    -- ExprField
 declare_syntax_cat rust_match_arm     -- MatchArm
 declare_syntax_cat rust_attr          -- Attribute
 
@@ -469,11 +476,11 @@ macro_rules
 
 macro_rules
   | `(rust_block| { $_stmts:rust_stmt* }) =>
-    `(term| Block.mk Option.none [] Option.none)
+    `(term| Block.mk BlockCheckMode.default_ [])
 
 macro_rules
   | `(rust_block| { $_stmts:rust_stmt* $tail:rust_expr }) =>
-    `(term| Block.mk Option.none [] (Option.some $(⟨tail⟩)))
+    `(term| Block.mk BlockCheckMode.default_ [Stmt.expr $(⟨tail⟩)])
 
 /-! ──────────────────────────────────────────────────────────────
     § 19  rust_ty → Ty
@@ -836,16 +843,17 @@ macro_rules
     `(term| UseTree.path (Ident.mk $(Lean.quote name)) (UseTree.list (List.reverse $lst)))
 
 /-! ──────────────────────────────────────────────────────────────
-    § 28  rust_field_init → FieldInit elaboration
+    § 28  rust_field_init → ExprField elaboration
 ──────────────────────────────────────────────────────────────── -/
 
 macro_rules
   | `(rust_field_init| $id:ident : $e:rust_expr) => do
     let name := id.getId.toString
-    `(term| FieldInit.full (Ident.mk $(Lean.quote name)) $(⟨e⟩))
+    `(term| ExprField.mk [] (Ident.mk $(Lean.quote name)) $(⟨e⟩) false)
   | `(rust_field_init| $id:ident) => do
     let name := id.getId.toString
-    `(term| FieldInit.shorthand (Ident.mk $(Lean.quote name)))
+    `(term| ExprField.mk [] (Ident.mk $(Lean.quote name))
+      (Expr.mk [] (.path (Path.mk [PathSegment.mk (Ident.mk $(Lean.quote name)) none]))) true)
 
 /-! ──────────────────────────────────────────────────────────────
     § 29  rust_match_arm → MatchArm elaboration
@@ -863,11 +871,11 @@ macro_rules
 
 macro_rules
   | `(rust_expr| $p:rust_path ! ( $lit:rust_literal )) =>
-    `(term| Expr.macro_ (MacroInvocation.mk $(⟨p⟩) (TokenTree.parens (ppLiteral $(⟨lit⟩) |>.render 0))))
+    `(term| Expr.macro_ (MacCall.mk $(⟨p⟩) (TokenTree.parens (ppLiteral $(⟨lit⟩) |>.render 0))))
   | `(rust_expr| $p:rust_path ! [ $lit:rust_literal ]) =>
-    `(term| Expr.macro_ (MacroInvocation.mk $(⟨p⟩) (TokenTree.brackets (ppLiteral $(⟨lit⟩) |>.render 0))))
+    `(term| Expr.macro_ (MacCall.mk $(⟨p⟩) (TokenTree.brackets (ppLiteral $(⟨lit⟩) |>.render 0))))
   | `(rust_expr| $p:rust_path ! { $lit:rust_literal }) =>
-    `(term| Expr.macro_ (MacroInvocation.mk $(⟨p⟩) (TokenTree.braces (ppLiteral $(⟨lit⟩) |>.render 0))))
+    `(term| Expr.macro_ (MacCall.mk $(⟨p⟩) (TokenTree.braces (ppLiteral $(⟨lit⟩) |>.render 0))))
 
 /-! ──────────────────────────────────────────────────────────────
     § 31  rust_item: async/const/unsafe fn elaboration
@@ -949,13 +957,13 @@ macro_rules
   | `(rust_block| { $stmts:rust_stmt* }) => do
     let stmtExprs ← stmts.mapM fun s => `(term| $(⟨s⟩))
     let stmtsList ← stmtExprs.foldlM (fun acc e => `(term| List.cons $e $acc)) (← `(term| List.nil))
-    `(term| Block.mk Option.none (List.reverse $stmtsList) Option.none)
+    `(term| Block.mk BlockCheckMode.default_ (List.reverse $stmtsList))
 
 macro_rules
   | `(rust_block| { $stmts:rust_stmt* $tail:rust_expr }) => do
     let stmtExprs ← stmts.mapM fun s => `(term| $(⟨s⟩))
     let stmtsList ← stmtExprs.foldlM (fun acc e => `(term| List.cons $e $acc)) (← `(term| List.nil))
-    `(term| Block.mk Option.none (List.reverse $stmtsList) (Option.some $(⟨tail⟩)))
+    `(term| Block.mk BlockCheckMode.default_ ((List.reverse $stmtsList).concat (Stmt.expr $(⟨tail⟩))))
 
 -- fn with zero params (priority fix: `()` would otherwise be parsed as rust_ty/rust_expr)
 syntax (priority := high) rust_vis* "fn" ident
@@ -974,45 +982,37 @@ syntax (priority := high) rust_vis* "unsafe" "fn" ident
 -- fn zero params, no return type
 macro_rules
   | `(rust_item| $vis:rust_vis* fn $name:ident () $body:rust_block) => do
-    let visExpr ← if vis.isEmpty then `(term| Option.none) else `(term| Option.some Visibility.pub)
+    let visExpr ← if vis.isEmpty then `(term| Visibility.inherited) else `(term| Visibility.public_)
     let nameIdent := name.getId.toString
     let bodyExpr ← `(term| $(⟨body⟩))
-    `(term| Item.fn_ [] $visExpr FnModifiers.none
-        (Ident.mk $(Lean.quote nameIdent)) Option.none [] Option.none Option.none
-        (Option.some $bodyExpr) Option.none [])
+    `(term| elabFnItem $visExpr ⟨.no, none, .safe, .none⟩
+        (Ident.mk $(Lean.quote nameIdent)) [] none $bodyExpr)
 
 -- fn zero params, with return type
 macro_rules
   | `(rust_item| $vis:rust_vis* fn $name:ident () -> $ret:rust_ty $body:rust_block) => do
-    let visExpr ← if vis.isEmpty then `(term| Option.none) else `(term| Option.some Visibility.pub)
+    let visExpr ← if vis.isEmpty then `(term| Visibility.inherited) else `(term| Visibility.public_)
     let nameIdent := name.getId.toString
     let retExpr  ← `(term| $(⟨ret⟩))
     let bodyExpr ← `(term| $(⟨body⟩))
-    `(term| Item.fn_ [] $visExpr FnModifiers.none
-        (Ident.mk $(Lean.quote nameIdent)) Option.none [] (Option.some $retExpr) Option.none
-        (Option.some $bodyExpr) Option.none [])
+    `(term| elabFnItem $visExpr ⟨.no, none, .safe, .none⟩
+        (Ident.mk $(Lean.quote nameIdent)) [] (some $retExpr) $bodyExpr)
 
 -- async fn zero params, no return type
 macro_rules
   | `(rust_item| $vis:rust_vis* async fn $name:ident () $body:rust_block) => do
-    let visExpr ← if vis.isEmpty then `(term| Option.none) else `(term| Option.some Visibility.pub)
+    let visExpr ← if vis.isEmpty then `(term| Visibility.inherited) else `(term| Visibility.public_)
     let nameIdent := name.getId.toString
     let bodyExpr ← `(term| $(⟨body⟩))
-    `(term| Item.fn_ [] $visExpr
-        (FnModifiers.mods (Option.some GenBlockKind.async_) Bool.false Bool.false Bool.false Option.none)
-        (Ident.mk $(Lean.quote nameIdent))
-        Option.none [] Option.none Option.none
-        (Option.some $bodyExpr) Option.none [])
+    `(term| elabFnItem $visExpr ⟨.no, some .async_, .safe, .none⟩
+        (Ident.mk $(Lean.quote nameIdent)) [] none $bodyExpr)
 
 -- async fn zero params, with return type
 macro_rules
   | `(rust_item| $vis:rust_vis* async fn $name:ident () -> $ret:rust_ty $body:rust_block) => do
-    let visExpr ← if vis.isEmpty then `(term| Option.none) else `(term| Option.some Visibility.pub)
+    let visExpr ← if vis.isEmpty then `(term| Visibility.inherited) else `(term| Visibility.public_)
     let nameIdent := name.getId.toString
     let retExpr ← `(term| $(⟨ret⟩))
     let bodyExpr ← `(term| $(⟨body⟩))
-    `(term| Item.fn_ [] $visExpr
-        (FnModifiers.mods (Option.some GenBlockKind.async_) Bool.false Bool.false Bool.false Option.none)
-        (Ident.mk $(Lean.quote nameIdent))
-        Option.none [] (Option.some $retExpr) Option.none
-        (Option.some $bodyExpr) Option.none [])
+    `(term| elabFnItem $visExpr ⟨.no, some .async_, .safe, .none⟩
+        (Ident.mk $(Lean.quote nameIdent)) [] (some $retExpr) $bodyExpr)

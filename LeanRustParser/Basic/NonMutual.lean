@@ -4,6 +4,175 @@ public import LeanRustParser.Basic.MacroRuleToken
 
 @[expose] public section
 
+/-- `rustc_ast::RangeLimits`. -/
+inductive RangeLimits where
+  | halfOpen | closed
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+
+/-- `rustc_ast::BorrowKind`, reduced to source-level reference forms. -/
+inductive BorrowKind where
+  | ref_ | raw | pin
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+
+/-- `rustc_ast::Mutability`. -/
+inductive Mutability where
+  | not | mut
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+
+/-- `rustc_ast::Safety`, without the keyword span. -/
+inductive Safety where
+  | safe | unsafe_ | default_
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+
+/-- `rustc_ast::TraitObjectSyntax`. -/
+inductive TraitObjectSyntax where
+  | dyn_ | none
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+
+/-- `rustc_ast::BlockCheckMode` for source-written blocks.
+`UnsafeSource::CompilerGenerated` is omitted because it is introduced by
+rustc after parsing and is not source syntax. -/
+inductive BlockCheckMode where
+  | default_ | unsafe_
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+
+/-- `rustc_ast::BindingMode`. -/
+structure BindingMode where
+  byRef : Bool
+  mutbl : Mutability
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+
+/-- `rustc_ast::PatFieldsRest`, omitting diagnostic recovery state. -/
+inductive PatFieldsRest where
+  | rest | none
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+
+/-- `rustc_ast::DelegationSuffixes`, without the glob span. -/
+inductive DelegationSuffixes
+  | list (items : List (Ident × Option Ident))
+  | glob
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Hashable
+
+/-- `rustc_ast::RangeSyntax`.  It distinguishes legacy `...` from `..=`;
+both are semantically inclusive but remain distinct source spellings. -/
+inductive RangeSyntax where
+  | dotDotDot | dotDotEq
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+
+/-- `rustc_ast::RangeEnd`, without its enclosing span. -/
+inductive RangeEnd where
+  | excluded | included (spelling : RangeSyntax)
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+
+/-- `rustc_ast::Pinnedness`, without the `pin` keyword span. -/
+inductive Pinnedness where
+  | notPinned | pinned
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+
+/-- `rustc_ast::InlineAsmRegOrRegClass`. -/
+inductive InlineAsmRegOrRegClass where
+  | reg (name : String)
+  | regClass (name : String)
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+
+/-- `rustc_ast::InlineAsmTemplatePiece`, without placeholder spans. -/
+inductive InlineAsmTemplatePiece where
+  | string (text : String)
+  | placeholder (operandIdx : Nat) (modifier : Option Char)
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+
+/-- `rustc_ast::AsmMacro`. -/
+inductive AsmMacro where
+  | asm | globalAsm | nakedAsm
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+
+/-- Source-level equivalent of rustc's `InlineAsmOptions` bitflags. -/
+structure InlineAsmOptions where
+  pure : Bool
+  nomem : Bool
+  readonly : Bool
+  preservesFlags : Bool
+  noreturn : Bool
+  nostack : Bool
+  attSyntax : Bool
+  raw : Bool
+  mayUnwind : Bool
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+
+/-- `rustc_ast::DelimArgs`, without delimiter spans.  This is independent of
+the recursive source AST: its payload is a macro token stream. -/
+structure DelimArgs where
+  delimiter : Delimiter
+  tokens : MacroRuleTokenStream
+  deriving Repr, BEq, Inhabited, DecidableEq, ReflBEq, LawfulBEq, Ord, Hashable
+
+/-- The source spelling of a format-string argument position.  rustc also
+stores `index : Result<usize, usize>` after resolving this spelling into its
+`FormatArgs.arguments` list.  That field is intentionally omitted: it is
+derived resolution/diagnostic metadata, and `Err(n)` only remembers an
+out-of-range index for error reporting. -/
+inductive FormatArgPosition
+  | implicit
+  | number (value : Nat)
+  | named (name : Ident)
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+
+inductive FormatTrait | display | debug | lowerExp | upperExp | octal | pointer | binary | lowerHex | upperHex
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+
+inductive FormatAlignment | left | right | center
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+
+inductive FormatSign | plus | minus
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+
+inductive FormatDebugHex | lower | upper
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+
+inductive FormatCount | literal (value : Nat) | argument (position : FormatArgPosition)
+  deriving Repr, Inhabited, BEq, DecidableEq, ReflBEq, LawfulBEq, Ord, Hashable
+
+structure FormatOptions where
+  width : Option FormatCount
+  precision : Option FormatCount
+  alignment : Option FormatAlignment
+  fill : Option Char
+  sign : Option FormatSign
+  alternate : Bool
+  zeroPad : Bool
+  debugHex : Option FormatDebugHex
+  deriving Repr, Inhabited, BEq, DecidableEq, ReflBEq, LawfulBEq, Ord, Hashable
+
+structure FormatPlaceholder where
+  argument : FormatArgPosition
+  formatTrait : FormatTrait
+  formatOptions : FormatOptions
+  deriving Repr, Inhabited, BEq, DecidableEq, ReflBEq, LawfulBEq, Ord, Hashable
+
+inductive FormatArgsPiece
+  | literal (text : String)
+  | placeholder (placeholder : FormatPlaceholder)
+  deriving Repr, Inhabited, BEq, DecidableEq, ReflBEq, LawfulBEq, Ord, Hashable
+
+inductive FormatArgumentKind
+  | normal
+  | named (ident : Ident)
+  | captured (ident : Ident)
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+
+/-- A source-tree stand-in for rustc's interned `ByteSymbol`. -/
+structure ByteSymbol where
+  bytes : List UInt8
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+
+-- Omitted: `rustc_errors::ErrorGuaranteed` proves that rustc emitted a
+-- diagnostic. Diagnostics are deliberately outside this source AST.
+-- /-- `rustc_errors::ErrorGuaranteed`, represented by the emitted diagnostic.
+-- The diagnostic store can replace this string with an opaque ID later. -/
+-- structure ErrorGuaranteed where
+--   diagnostic : String
+--   deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+
 -- A complete Lean 4 AST for Rust, derived from rustc_ast and the syn crate,
 -- covering all stable and nightly constructs.
 -- This file contains only data type definitions (no pretty-printing, no elaboration).
@@ -30,19 +199,19 @@ def PrimitiveType.toString : PrimitiveType → String
   | .f64   => "f64"   | .f128  => "f128"
   | .bool_ => "bool"  | .str_  => "str"  | .char_ => "char"
 
-/-- A lifetime `'a`. -/
+/-- `rustc_ast::Lifetime`, without its ID and span. -/
 structure Lifetime where
-  name : String   -- without the leading `'`
+  ident : Ident
   deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
-def Lifetime.toString (l : Lifetime) : String := "'" ++ l.name
+def Lifetime.toString (l : Lifetime) : String := "'" ++ l.ident.name
 
-/-- A label `'outer`. -/
+/-- `rustc_ast::Label`, without its ID and span. -/
 structure Label where
-  name : String
+  ident : Ident
   deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
-def Label.toString (l : Label) : String := "'" ++ l.name
+def Label.toString (l : Label) : String := "'" ++ l.ident.name
 
 /-- Fragment specifiers inside macro_rules patterns. -/
 inductive FragmentSpecifier
@@ -60,302 +229,134 @@ def FragmentSpecifier.toString : FragmentSpecifier → String
   | .tt       => "tt"       | .ty       => "ty"
   | .vis      => "vis"
 
-/-- Visibility modifier (matches rustc's `VisibilityKind`). -/
-inductive Visibility
-  | inherited            -- default (no modifier)
-  | pub                  -- `pub`
-  | pubCrate             -- `pub(crate)`
-  | pubSelf              -- `pub(self)`
-  | pubSuper             -- `pub(super)`
-  | pubIn (path : String) -- `pub(in path)`
-  | crateKw              -- bare `crate` (old-style)
+/-- `rustc_ast::BinOpKind`.  The outer rustc `BinOp` only adds a span, so this
+source tree stores the kind directly. -/
+inductive BinOpKind
+  | add | sub | mul | div | rem | and | or | bitXor | bitAnd | bitOr
+  | shl | shr | eq | lt | le | ne | ge | gt
   deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
-def Visibility.toString : Visibility → String
-  | .inherited  => ""
-  | .pub        => "pub"
-  | .pubCrate   => "pub(crate)"
-  | .pubSelf    => "pub(self)"
-  | .pubSuper   => "pub(super)"
-  | .pubIn p    => s!"pub(in {p})"
-  | .crateKw    => "crate"
-
-/-- Binary operators (arithmetic, logical, bitwise, comparison). -/
-inductive BinOp
-  | and | or | bitAnd | bitOr | bitXor
-  | eq | ne | lt | le | gt | ge
-  | shl | shr | add | sub | mul | div | rem
+/-- `rustc_ast::UnOp`. -/
+inductive UnOp | deref | not | neg
   deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
-def BinOp.toString : BinOp → String
-  | .and    => "&&" | .or     => "||"
-  | .bitAnd => "&"  | .bitOr  => "|"  | .bitXor => "^"
-  | .eq     => "==" | .ne     => "!=" | .lt     => "<"  | .le => "<="
-  | .gt     => ">"  | .ge     => ">="
-  | .shl    => "<<" | .shr    => ">>"
-  | .add    => "+"  | .sub    => "-"  | .mul    => "*"
-  | .div    => "/"  | .rem    => "%"
-
-/-- Compound-assignment operators. -/
-inductive CompoundOp
-  | addEq | subEq | mulEq | divEq | remEq
-  | andEq | orEq  | xorEq | shlEq | shrEq
-  deriving Repr, DecidableEq
-
-def CompoundOp.toString : CompoundOp → String
-  | .addEq => "+=" | .subEq => "-=" | .mulEq => "*="
-  | .divEq => "/=" | .remEq => "%=" | .andEq => "&="
-  | .orEq  => "|=" | .xorEq => "^=" | .shlEq => "<<=" | .shrEq => ">>="
-
-/-- Unary operators. -/
-inductive UnaryOp | neg | deref | not deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
-
-def UnaryOp.toString : UnaryOp → String
-  | .neg => "-" | .deref => "*" | .not => "!"
-
-/-- Range operators. -/
-inductive RangeOp | exclusive | inclusive | dotDotDot deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
-
-def RangeOp.toString : RangeOp → String
-  | .exclusive => ".." | .inclusive => "..=" | .dotDotDot => "..."
-
-/-- How a closure captures its environment (rustc `CaptureBy`). -/
+/-- How a closure captures its environment (`rustc_ast::CaptureBy`). -/
 inductive CaptureBy
-  | value   -- `move`
-  | ref_    -- default (by reference)
-  | use_    -- `use` (precise capturing, nightly)
+  | value | ref_ | use_
   deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
-/-- The kind of generator block (rustc `GenBlockKind`). -/
-inductive GenBlockKind
-  | async_    -- `async { ... }`
-  | gen       -- `gen { ... }` (nightly)
-  | asyncGen  -- `async gen { ... }` (nightly)
+/-- `rustc_ast_ir::Movability`, without the keyword span.  `Movable` is the
+ordinary source form; `Static` is retained because rustc stores it on closures
+created for async/generator syntax. -/
+inductive Movability
+  | static_ | movable
   deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
-/-- Whether a `match` is prefix or postfix (nightly postfix-match). -/
-inductive MatchKind | prefix | postfix deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
-
-/-- Whether a `yield` is prefix or postfix. -/
-inductive YieldKind | prefix | postfix deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
-
-/-- Whether a `for` loop is plain or `for await`. -/
-inductive ForLoopKind | for_ | forAwait deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
-
-/-- Unsafe binder cast direction. -/
-inductive UnsafeBinderCastKind | wrap | unwrap deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
-
-/-- How a macro invocation statement is terminated. -/
-inductive MacStmtStyle
-  | semicolon  -- `mac!(...);`
-  | braces     -- `mac! { ... }` (no semicolon needed)
-  | noBraces   -- `mac!(...)` used as expression statement
+/-- The kind of generator block (`rustc_ast::GenBlockKind`). -/
+inductive GenBlockKind | async_ | gen | asyncGen
   deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
-/-- TraitBound modifier (e.g. `?Sized`). -/
-inductive TraitBoundModifier | none | maybe | maybeConst deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
-
-
-/-- Literal values. -/
-inductive Literal
-  | int_    (raw : String)
-  | float_  (raw : String)
-  | str_    (raw : String)       -- `"hello"`
-  | byteStr (raw : String)       -- `b"hello"`
-  | cStr    (raw : String)       -- `c"hello"` (C-string literal)
-  | rawStr  (raw : String)       -- `r#"..."#`
-  | char_   (raw : String)       -- `'a'`
-  | byte_   (raw : String)       -- `b'x'`
-  | bool_   (b : Bool)
+/-- `rustc_ast::MatchKind`. -/
+inductive MatchKind | prefix | postfix
   deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
--- 1. Standalone types extracted from the mutual block
--- These do not depend on the core cycle (Expr/Ty/Stmt/Item).
-
-
-/-- Function modifier flags (safety, constness, asyncness, extern ABI). -/
-inductive FnModifiers
-  | mods (coroutine : Option GenBlockKind)
-         (isConst : Bool)
-         (isUnsafe : Bool)
-         (isDefault : Bool)
-         (extABI : Option (Option String))  -- None = no extern; some none = bare extern; some (some "C") = extern "C"
+/-- `rustc_ast::ForLoopKind`. -/
+inductive ForLoopKind | for_ | forAwait
   deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
-@[reducible] def FnModifiers.none : FnModifiers :=
-  .mods Option.none false false false Option.none
+/-- `rustc_ast::UnsafeBinderCastKind`. -/
+inductive UnsafeBinderCastKind | wrap | unwrap
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
-/-- A macro_rules rule: `pattern => body`. -/
-structure MacroRule where
-  pattern : MacroRuleTokenTree
-  body : MacroRuleTokenTree
-  deriving Repr, BEq, Inhabited
+/-- `rustc_ast::MacStmtStyle`. -/
+inductive MacStmtStyle | semicolon | braces | noBraces
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
-/-- Use tree (import path). -/
-inductive UseTree
-  | path  (seg : Ident) (child : UseTree)
-  | name  (id : Ident)
-  | alias (id : Ident) (alias : Ident)
-  | glob
-  | list  (trees : List UseTree)
-  | self_
-  deriving Repr, Inhabited, Ord, Hashable
+/-- `rustc_ast::BoundPolarity`, without keyword spans. -/
+inductive BoundPolarity | positive | negative | maybe
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
---, DecidableEq, ReflBEq, LawfulBEq -- underivable
--- BEq - derivable, but better ourselves
+/-- `rustc_ast::BoundConstness`, without keyword spans. -/
+inductive BoundConstness | never | always | maybe
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
-namespace UseTree
-noncomputable def decEq (x y : UseTree) : Decidable (x = y) := by
-  cases x <;> cases y
-  all_goals expose_names;
-  · exact Classical.propDecidable (path seg child = path seg_1 child_1)
-  · exact Classical.propDecidable (path seg child = name id)
-  · exact Classical.propDecidable (path seg child = UseTree.alias id alias)
-  · exact Classical.propDecidable (path seg child = glob)
-  · exact Classical.propDecidable (path seg child = list trees)
-  · exact Classical.propDecidable (path seg child = self_)
-  · exact Classical.propDecidable (name id = path seg child)
-  · exact Classical.propDecidable (name id = name id_1)
-  · exact Classical.propDecidable (name id = UseTree.alias id_1 alias)
-  · exact Classical.propDecidable (name id = glob)
-  · exact Classical.propDecidable (name id = list trees)
-  · exact Classical.propDecidable (name id = self_)
-  · exact Classical.propDecidable (UseTree.alias id alias = path seg child)
-  · exact Classical.propDecidable (UseTree.alias id alias = name id_1)
-  · exact Classical.propDecidable (UseTree.alias id alias = UseTree.alias id_1 alias_1)
-  · exact Classical.propDecidable (UseTree.alias id alias = glob)
-  · exact Classical.propDecidable (UseTree.alias id alias = list trees)
-  · exact Classical.propDecidable (UseTree.alias id alias = self_)
-  · exact Classical.propDecidable (glob = path seg child)
-  · exact Classical.propDecidable (glob = name id)
-  · exact Classical.propDecidable (glob = UseTree.alias id alias)
-  · simp_all only
-    exact instDecidableTrue
-  · exact Classical.propDecidable (glob = list trees)
-  · exact Classical.propDecidable (glob = self_)
-  · exact Classical.propDecidable (list trees = path seg child)
-  · exact Classical.propDecidable (list trees = name id)
-  · exact Classical.propDecidable (list trees = UseTree.alias id alias)
-  · exact Classical.propDecidable (list trees = glob)
-  · exact Classical.propDecidable (list trees = list trees_1)
-  · exact Classical.propDecidable (list trees = self_)
-  · exact Classical.propDecidable (self_ = path seg child)
-  · exact Classical.propDecidable (self_ = name id)
-  · exact Classical.propDecidable (self_ = UseTree.alias id alias)
-  · exact Classical.propDecidable (self_ = glob)
-  · exact Classical.propDecidable (self_ = list trees)
-  · simp_all only
-    exact instDecidableTrue
+/-- `rustc_ast::BoundAsyncness`, without the `async` span. -/
+inductive BoundAsyncness | normal | async_
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
-noncomputable instance : DecidableEq UseTree := decEq
+/-- `rustc_ast::TraitBoundModifiers`, without spans. -/
+structure TraitBoundModifiers where
+  constness : BoundConstness
+  asyncness : BoundAsyncness
+  polarity : BoundPolarity
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
-mutual
-  def beq : UseTree → UseTree → Bool
-    | path seg1 child1, path seg2 child2 => seg1 == seg2 && beq child1 child2
-    | name id1, name id2 => id1 == id2
-    | alias id1 al1, alias id2 al2 => id1 == id2 && al1 == al2
-    | glob, glob => true
-    | list trees1, list trees2 => list_beq trees1 trees2
-    | self_, self_ => true
-    | _, _ => false
+/-- `rustc_ast::Parens`.  It records source parentheses around a trait bound;
+unlike spans, this affects the concrete syntax and is retained. -/
+inductive Parens | yes | no
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
-  def list_beq : List UseTree → List UseTree → Bool
-    | [], [] => true
-    | t1 :: ts1, t2 :: ts2 => beq t1 t2 && list_beq ts1 ts2
-    | _, _ => false
-end
+/-- `rustc_ast::Const`, without its keyword span. -/
+inductive Const | yes | no
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
-instance : BEq UseTree where
-  beq := beq
+/-- `rustc_ast::CoroutineKind`, omitting its span and generated node IDs.  The
+IDs are lowering metadata; source syntax is fully represented by the variant. -/
+inductive CoroutineKind | async_ | gen | asyncGen
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
-theorem list_beq_eq (xs ys : List UseTree) : list_beq xs ys = (xs == ys) := by
-  induction xs generalizing ys with
-  | nil =>
-    cases ys <;> rfl
-  | cons x xs ih =>
-    cases ys with
-    | nil => rfl
-    | cons y ys =>
-      dsimp [BEq.beq, beq, list_beq]
-      rw [ih]
-      rfl
+/-- `rustc_ast::StrStyle`. -/
+inductive StrStyle | cooked | raw (hashes : Nat)
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
-mutual
-  theorem beq_self (x : UseTree) : (x == x) = true := by
-    cases x with
-    | path seg child =>
-      change (seg == seg && child == child) = true
-      simp [beq_self child]
-    | name id =>
-      change (id == id) = true
-      simp
-    | alias id al =>
-      change (id == id && al == al) = true
-      simp
-    | glob =>
-      rfl
-    | list trees =>
-      change (list_beq trees trees) = true
-      rw [list_beq_eq]
-      exact list_beq_self trees
-    | self_ =>
-      rfl
+/-- `rustc_ast::StrLit`, without span. `symbolUnescaped` is intentionally
+omitted because it is derived while decoding the literal rather than written
+source syntax. -/
+structure StrLit where
+  symbol : String
+  suffix : Option String
+  style : StrStyle
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
-  theorem list_beq_self (xs : List UseTree) : (xs == xs) = true := by
-    cases xs with
-    | nil => rfl
-    | cons y ys =>
-      change (y == y && ys == ys) = true
-      rw [beq_self y, list_beq_self ys]
-      rfl
-end
+/-- `rustc_ast::Extern`, without keyword spans. -/
+inductive Extern | none | implicit | explicit (abi : StrLit)
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
-mutual
-  theorem eq_of_beq_internal (x y : UseTree) (h : beq x y = true) : x = y := by
-    cases x <;> cases y
-    all_goals (try (dsimp [beq] at h; contradiction))
-    · -- path / path
-      dsimp [beq] at h
-      simp at h
-      have ⟨h1, h2⟩ := h
-      rw [h1, eq_of_beq_internal _ _ h2]
-    · -- name / name
-      dsimp [beq] at h
-      simp at h
-      rw [h]
-    · -- alias / alias
-      dsimp [beq] at h
-      simp at h
-      have ⟨h1, h2⟩ := h
-      rw [h1, h2]
-    · -- glob / glob
-      rfl
-    · -- list / list
-      dsimp [beq] at h
-      rw [list_eq_of_beq_internal _ _ h]
-    · -- self / self
-      rfl
+/-- `rustc_ast::FnHeader`, without keyword spans. -/
+structure FnHeader where
+  constness : Const
+  coroutineKind : Option CoroutineKind
+  safety : Safety
+  ext : Extern
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
-  theorem list_eq_of_beq_internal (xs ys : List UseTree) (h : list_beq xs ys = true) : xs = ys := by
-    cases xs <;> cases ys
-    all_goals (try (dsimp [list_beq] at h; contradiction))
-    · rfl
-    · -- cons / cons
-      dsimp [list_beq] at h
-      simp at h
-      have ⟨h1, h2⟩ := h
-      rw [eq_of_beq_internal _ _ h1, list_eq_of_beq_internal _ _ h2]
-end
+/-- `rustc_ast::Defaultness`, without keyword spans. -/
+inductive Defaultness | implicit | default_ | final_
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
-instance : LawfulBEq UseTree where
-  eq_of_beq := by
-    intro x y h
-    change beq x y = true at h
-    exact eq_of_beq_internal x y h
-  rfl := by
-    intro x
-    exact beq_self x
+/-- `rustc_ast::IsAuto`. -/
+inductive IsAuto | yes | no
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
-instance : ReflBEq UseTree where
-  rfl := by intro x; exact beq_self x
-end UseTree
+/-- `rustc_ast::Inline`, with the parse-error diagnostic deliberately omitted.
+`yes` is an inline module body and `no` is a loaded outlined module. -/
+inductive Inline | yes | no
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+
+/-- `rustc_ast::DelegationSource`.  `List` carries a `LocalExpnId` in rustc;
+that ID is expansion metadata, so this source tree retains only which written
+delegation form produced the item. -/
+inductive DelegationSource | single | list | glob
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+
+/-- `rustc_ast::ImplPolarity`, without the `!` span. -/
+inductive ImplPolarity | positive | negative
+  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+
+/-- `rustc_ast::MacroDef`, without the lowering-only `eii_declaration` field.
+That field is populated for a built-in attribute macro after name-resolution
+work and is not source syntax. -/
+structure MacroDef where
+  body : DelimArgs
+  macroRules : Bool
+  deriving Repr

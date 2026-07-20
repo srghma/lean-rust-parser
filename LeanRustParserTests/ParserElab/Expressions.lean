@@ -1,6 +1,7 @@
 module
 
 public import LeanRustParser.ParserElabForTests
+public import LeanRustParser.PrettyPrinter
 
 @[expose] public section
 

@@ -60,29 +60,37 @@ inductive NtExprKind where
   | expr2021 (inferred : Bool)
   deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
-/-- `rustc_errors::ErrorGuaranteed` without its diagnostic-context lifetime. -/
+-- Omitted: `rustc_errors::ErrorGuaranteed` is diagnostic-context state and
+-- this source token tree deliberately contains no diagnostics.
+-- /-- `rustc_errors::ErrorGuaranteed` without its diagnostic-context lifetime. -/
 -- structure ErrorGuaranteed where
 --   id : Nat
 --   deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
-inductive MetaVarKind where
-  | item | block | stmt
-  | pat (kind : NtPatKind)
-  | expr (kind : NtExprKind) (canBeginLiteralMaybeMinus : Bool) (canBeginStringLiteral : Bool)
-  | ty (isPath : Bool)
-  | ident | lifetime | literal
-  | meta_ (hasMetaForm : Bool)
-  | path | vis | guard | tt
-  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+-- Omitted: `MetaVarKind` stores declarative-macro matcher and reparsing
+-- metadata (including inferred-edition flags). It is not source syntax.
+-- inductive MetaVarKind where
+--  | item | block | stmt
+--  | pat (kind : NtPatKind)
+--  | expr (kind : NtExprKind) (canBeginLiteralMaybeMinus : Bool) (canBeginStringLiteral : Bool)
+--  | ty (isPath : Bool)
+--  | ident | lifetime | literal
+--  | meta_ (hasMetaForm : Bool)
+--  | path | vis | guard | tt
+--  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
-inductive InvisibleOrigin where
-  | metaVar (kind : MetaVarKind)
-  | procMacro
-  deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
+--
+-- Omitted: `InvisibleOrigin` records macro-expansion provenance. Invisible
+-- delimiters do not occur in a source token tree.
+-- inductive InvisibleOrigin where
+--  | metaVar (kind : MetaVarKind)
+--  | procMacro
+
 
 inductive Delimiter where
   | parenthesis | brace | bracket
-  | invisible (origin : InvisibleOrigin)
+  -- Omitted: invisible delimiters are inserted by macro expansion, not source.
+  -- | invisible (origin : InvisibleOrigin)
   deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
 inductive IdentIsRaw where
@@ -94,7 +102,9 @@ inductive LitKind where
   | strRaw (hashes : Nat)
   | byteStr | byteStrRaw (hashes : Nat)
   | cStr | cStrRaw (hashes : Nat)
-  | err -- (error : ErrorGuaranteed)
+  -- Omitted: rustc's `Err(ErrorGuaranteed)` is a recovery token tied to its
+  -- diagnostic context; this source token tree contains no diagnostics.
+  -- | err -- (error : ErrorGuaranteed)
   deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
 structure Lit where
@@ -122,19 +132,24 @@ inductive MacroRuleToken where
   | at | dot | dotDot | dotDotDot | dotDotEq | comma | semi | colon | pathSep
   | rArrow | lArrow | fatArrow | pound | dollar | question | singleQuote
   | openParen | closeParen | openBrace | closeBrace | openBracket | closeBracket
-  | openInvisible (origin : InvisibleOrigin) | closeInvisible (origin : InvisibleOrigin)
+  -- Omitted: invisible delimiters are macro-expansion provenance, not source.
+  -- | openInvisible (origin : InvisibleOrigin) | closeInvisible (origin : InvisibleOrigin)
 
   | literal (lit : Lit)
   | ident (symbol : String) (raw : IdentIsRaw)
-  | ntIdent (ident : Ident) (raw : IdentIsRaw)
+  -- Omitted: interpolated nonterminal identifiers are expansion output.
+  -- | ntIdent (ident : Ident) (raw : IdentIsRaw)
   | lifetime (symbol : String) (raw : IdentIsRaw)
-  | ntLifetime (ident : Ident) (raw : IdentIsRaw)
+  -- Omitted: interpolated nonterminal lifetimes are expansion output.
+  -- | ntLifetime (ident : Ident) (raw : IdentIsRaw)
   | docComment (kind : CommentKind) (style : AttrStyle) (symbol : String)
   | eof
   deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
 inductive Spacing where
-  | alone | joint | jointHidden
+  | alone | joint
+  -- Omitted: `jointHidden` is macro-expansion token-stream metadata. `alone`
+  -- and `joint` remain because source punctuation needs them for tokenization.
   deriving Repr, DecidableEq, BEq, Inhabited, ReflBEq, LawfulBEq, Ord, Hashable
 
 structure DelimSpacing where
@@ -145,6 +160,67 @@ structure DelimSpacing where
 inductive MacroRuleTokenTree where
   | token (token : MacroRuleToken) (spacing : Spacing)
   | delimited (spacing : DelimSpacing) (delimiter : Delimiter) (tokens : List MacroRuleTokenTree)
-  deriving Repr, BEq, Inhabited
+  deriving Repr, Inhabited, Ord, Hashable
+
+mutual
+  /-- Structural equality for one token tree.  This is explicit because the
+  tree recurs through `List MacroRuleTokenTree`. -/
+  def macroRuleTokenTreeDecEq :
+      (a b : MacroRuleTokenTree) → Decidable (a = b)
+    | .token tok spacing, .token tok' spacing' =>
+        match (inferInstance : Decidable (tok = tok')),
+          (inferInstance : Decidable (spacing = spacing')) with
+        | .isTrue hToken, .isTrue hSpacing =>
+            .isTrue (by subst tok'; subst spacing'; rfl)
+        | .isFalse hToken, _ =>
+            .isFalse (by intro h; cases h; exact hToken rfl)
+        | _, .isFalse hSpacing =>
+            .isFalse (by intro h; cases h; exact hSpacing rfl)
+    | .token _ _, .delimited _ _ _ => .isFalse (by intro h; cases h)
+    | .delimited _ _ _, .token _ _ => .isFalse (by intro h; cases h)
+    | .delimited spacing delimiter tokens, .delimited spacing' delimiter' tokens' =>
+        match (inferInstance : Decidable (spacing = spacing')),
+          (inferInstance : Decidable (delimiter = delimiter')),
+          macroRuleTokenTreeListDecEq tokens tokens' with
+        | .isTrue hSpacing, .isTrue hDelimiter, .isTrue hTokens =>
+            .isTrue (by subst spacing'; subst delimiter'; subst tokens'; rfl)
+        | .isFalse hSpacing, _, _ =>
+            .isFalse (by intro h; cases h; exact hSpacing rfl)
+        | _, .isFalse hDelimiter, _ =>
+            .isFalse (by intro h; cases h; exact hDelimiter rfl)
+        | _, _, .isFalse hTokens =>
+            .isFalse (by intro h; cases h; exact hTokens rfl)
+
+  /-- Structural equality for the recursive child list. -/
+  def macroRuleTokenTreeListDecEq :
+      (xs ys : List MacroRuleTokenTree) → Decidable (xs = ys)
+    | [], [] => .isTrue rfl
+    | [], _ :: _ => .isFalse (by intro h; cases h)
+    | _ :: _, [] => .isFalse (by intro h; cases h)
+    | x :: xs, y :: ys =>
+        match macroRuleTokenTreeDecEq x y, macroRuleTokenTreeListDecEq xs ys with
+        | .isTrue hHead, .isTrue hTail =>
+            .isTrue (by cases hHead; cases hTail; rfl)
+        | .isFalse hHead, _ =>
+            .isFalse (by intro h; cases h; exact hHead rfl)
+        | _, .isFalse hTail =>
+            .isFalse (by intro h; cases h; exact hTail rfl)
+end
+
+/-- Explicit structural equality for macro token trees. -/
+instance : DecidableEq MacroRuleTokenTree := macroRuleTokenTreeDecEq
+
+/-- `BEq` is deliberately defined from the explicit `DecidableEq` above. -/
+instance : BEq MacroRuleTokenTree where
+  beq a b := decide (a = b)
+
+/-- The chosen boolean equality is reflexive. -/
+instance : ReflBEq MacroRuleTokenTree where
+  rfl := by simp
+
+/-- The chosen boolean equality is exactly structural equality. -/
+instance : LawfulBEq MacroRuleTokenTree where
+  eq_of_beq := of_decide_eq_true
+  rfl := of_decide_eq_self_eq_true _
 
 abbrev MacroRuleTokenStream := List MacroRuleTokenTree
