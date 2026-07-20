@@ -10,6 +10,7 @@ module
 -- public import LeanRustParserTests.ParserElab.Types
 public import LeanRustParser.Parser
 public import LeanRustParser.PrettyPrinter
+public import Std.Data.TreeSet
 
 @[expose] public section
 
@@ -282,16 +283,19 @@ def shouldParseAndPassOtherStages (inputPath : FilePath) (input : String) (editi
 
 def runRustFileParserTests (upToStage : RustParserStage) (skipAlreadyPassed : Bool := false)
     (stopOnFirstError : Bool := false) (compactOutput : Bool := false)
-    (only : Option (List String) := none) (except : List String := []) : IO Bool := do
+    (showSummary : Bool := false)
+    (only : Option (Std.TreeSet String) := none) (exclude : Std.TreeSet String := {}) : IO Bool := do
   IO.FS.createDirAll rustOutputDir
   let allFiles ← rustCodeFiles
   let included := match only with
     | none => allFiles
     | some names => allFiles.filter fun path => names.contains (path.fileName.getD "")
-  let files := included.filter fun path => !except.contains (path.fileName.getD "")
+  let files := included.filter fun path => !exclude.contains (path.fileName.getD "")
   let initialParsed ← if skipAlreadyPassed then readParserState else pure []
   let mut parsed := initialParsed
   let mut allOk := true
+  let mut passedTests : List String := []
+  let mut failedTests : List String := []
   for inputPath in files do
     let expected ← rustStatus inputPath
     let input ← IO.FS.readFile inputPath
@@ -324,12 +328,21 @@ def runRustFileParserTests (upToStage : RustParserStage) (skipAlreadyPassed : Bo
         IO.println s!"D {displayPath}\n{diff}"
       IO.println s!"F {displayPath} {String.intercalate " " compactFailures}"
     if allFileOk then
+      passedTests := displayPath.toString :: passedTests
       if skipAlreadyPassed then
         parsed := fingerprint :: parsed
         IO.FS.writeFile rustParserStatePath (String.intercalate "\n" parsed ++ "\n")
     else
+      failedTests := displayPath.toString :: failedTests
       allOk := false
       if stopOnFirstError then return false
+  if showSummary then
+    IO.println "Passed tests:"
+    for test in passedTests.reverse do
+      IO.println s!"  {test}"
+    IO.println "Failed tests:"
+    for test in failedTests.reverse do
+      IO.println s!"  {test}"
   return allOk
 
 def parserStageFromName : String → Option RustParserStage
@@ -343,20 +356,48 @@ def upToStageFromArgs (args : List String) : RustParserStage :=
   args.find? (·.startsWith "--up-to-stage=") |>.bind
     (fun argument => parserStageFromName (argument.drop "--up-to-stage=".length).toString) |>.getD .astBeq
 
-def onlyFromArgs (args : List String) : Option (List String) :=
-  args.find? (·.startsWith "--only=") |>.map
-    (fun argument => (argument.drop "--only=".length).toString.splitOn "|" |>.filter (!·.isEmpty))
+def valuesFromArgs (flagPrefix : String) (args : List String) : List String :=
+  (args.filter (·.startsWith flagPrefix)).flatMap fun argument =>
+    (argument.drop flagPrefix.length).toString.splitOn "|" |>.filter (!·.isEmpty)
 
-def exceptFromArgs (args : List String) : List String :=
-  args.find? (·.startsWith "--except=") |>.map
-    (fun argument => (argument.drop "--except=".length).toString.splitOn "|" |>.filter (!·.isEmpty)) |>.getD []
+def duplicateNames (names : List String) : Bool :=
+  names.eraseDups.length != names.length
+
+def nameSetFromValues (optionName : String) (values : List String) : IO (Std.TreeSet String) := do
+  if duplicateNames values then
+    throw <| IO.userError s!"{optionName} contains duplicate test names"
+  return Std.TreeSet.ofList values
+
+def onlyFromArgs (args : List String) : IO (Option (Std.TreeSet String)) := do
+  if args.any (·.startsWith "--only=") then
+    some <$> nameSetFromValues "--only" (valuesFromArgs "--only=" args)
+  else
+    pure none
+
+def excludeFromArgs (args : List String) : IO (Std.TreeSet String) :=
+  nameSetFromValues "--exclude" (valuesFromArgs "--exclude=" args ++ valuesFromArgs "--except=" args)
+
+def validateSelection (allFiles : List FilePath) (only : Option (Std.TreeSet String))
+    (exclude : Std.TreeSet String) : IO Unit := do
+  let available := Std.TreeSet.ofList (allFiles.map (·.fileName.getD ""))
+  let onlyNames := only.getD {}
+  let unknownOnly := onlyNames.toList.filter (!available.contains ·)
+  if !unknownOnly.isEmpty then
+    throw <| IO.userError s!"--only contains unknown tests: {String.intercalate ", " unknownOnly}"
+  let unknownExclude := exclude.toList.filter (!available.contains ·)
+  if !unknownExclude.isEmpty then
+    throw <| IO.userError s!"--exclude contains unknown tests: {String.intercalate ", " unknownExclude}"
+  let overlap := onlyNames.toList.filter (exclude.contains ·)
+  if !overlap.isEmpty then
+    throw <| IO.userError s!"--only and --exclude overlap: {String.intercalate ", " overlap}"
 
 def main (args : List String) : IO UInt32 := do
   let stopOnFirstError := args.contains "--stop-on-first-error"
   let skipAlreadyPassed := args.contains "--skip-already-passed"
   let compactOutput := args.contains "--compact-output"
-  let only := onlyFromArgs args
-  let except := exceptFromArgs args
+  let showSummary := args.contains "--show-summary"
+  let only ← onlyFromArgs args
+  let exclude ← excludeFromArgs args
   let upToStage := upToStageFromArgs args
   -- let allOk ← if compactOutput then
   --   pure true
@@ -368,7 +409,9 @@ def main (args : List String) : IO UInt32 := do
   --   ) true
   let allOk := true
   report compactOutput s!"=== Rust file parser; up to {rustParserStageName upToStage} ==="
-  let fileParserOk ← runRustFileParserTests upToStage skipAlreadyPassed stopOnFirstError compactOutput only except
+  let allFiles ← rustCodeFiles
+  validateSelection allFiles only exclude
+  let fileParserOk ← runRustFileParserTests upToStage skipAlreadyPassed stopOnFirstError compactOutput showSummary only exclude
   let allOk := allOk && fileParserOk
   if allOk then
     report compactOutput "All tests passed."
