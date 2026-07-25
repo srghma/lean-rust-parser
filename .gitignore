@@ -4,8 +4,8 @@
 .lake/*
 .cache/*
 .rust-code-generation-tmp/
-LeanRustParserTests/rust-code/
-LeanRustParserTests/rust-code--output-of-lean-prettyprint/
+# LeanRustParserTests/rust-code/
+# LeanRustParserTests/rust-code--output-of-lean-prettyprint/
 ## Blueprint
 /blueprint/print/print.log
 /blueprint/web/

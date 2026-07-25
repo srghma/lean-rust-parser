@@ -79,12 +79,51 @@ def litKindOfLex : LexLitKind → LitKind
   | .strRaw hashes => .strRaw hashes | .byteStr => .byteStr | .byteStrRaw hashes => .byteStrRaw hashes
   | .cStr => .cStr | .cStrRaw hashes => .cStrRaw hashes
 
+def isHexDigit (c : Char) : Bool :=
+  ('0' <= c && c <= '9') || ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F')
+
+def hexDigitValue (c : Char) : Nat :=
+  if '0' <= c && c <= '9' then c.toNat - '0'.toNat
+  else if 'a' <= c && c <= 'f' then c.toNat - 'a'.toNat + 10
+  else c.toNat - 'A'.toNat + 10
+
+partial def hasInvalidAsciiHexEscape (source : String.Slice) (pos : source.Pos) : Bool :=
+  match pos.get? with
+  | none => false
+  | some '\\' =>
+      if peekN? source pos 1 == some '\\' then
+        hasInvalidAsciiHexEscape source (advanceN source pos 2)
+      else
+        match peekN? source pos 1, peekN? source pos 2, peekN? source pos 3 with
+        | some 'x', some high, some low =>
+            (isHexDigit high && isHexDigit low && hexDigitValue high >= 8) ||
+              hasInvalidAsciiHexEscape source (advanceN source pos 4)
+        | _, _, _ => hasInvalidAsciiHexEscape source (advanceN source pos 1)
+  | some _ => hasInvalidAsciiHexEscape source (advanceN source pos 1)
+
 def parseLiteral : ParserM Lit := do
   match ← take with
-  | .literal literal => pure ⟨litKindOfLex literal.kind, literal.text.copy, none⟩
+  | .literal literal =>
+      if literal.kind == .str && hasInvalidAsciiHexEscape literal.text literal.text.startPos then
+        parserFail Lit "out of range hex escape in string literal"
+      else
+        pure ⟨litKindOfLex literal.kind, literal.text.copy, none⟩
   | .keyword .true_ => pure ⟨.bool, "true", none⟩
   | .keyword .false_ => pure ⟨.bool, "false", none⟩
   | token => parserFail Lit s!"expected literal, found {describeLexToken token}"
+
+def normalizeBreakParen (expr : Expr) : Expr :=
+  match expr.kind with
+  | .paren inner =>
+      match inner.kind with
+      | .break_ _ _ => inner
+      | _ => expr
+  | _ => expr
+
+def stripMacroRuleSemis : MacroRuleTokenStream → MacroRuleTokenStream
+  | .token .semi _ :: rest => stripMacroRuleSemis rest
+  | tree :: rest => tree :: stripMacroRuleSemis rest
+  | [] => []
 
 mutual
 partial def macroTokenTree : ParserM MacroRuleTokenTree := do
@@ -177,7 +216,24 @@ partial def parsePat : ParserM Pat := do
 
 partial def parseExpr : ParserM Expr := do
   let atom ← parseAtom
-  parseExprSuffix atom
+  let left ← parseExprSuffix atom
+  parseBinaryExpr left
+
+partial def parseBinaryExpr (left : Expr) : ParserM Expr := do
+  match ← peek with
+  | some (.punctuation .plus) =>
+      expectPunctuation .plus
+      let right ← parseExpr
+      pure ⟨[], .binary .add left right⟩
+  | some (.punctuation .minus) =>
+      expectPunctuation .minus
+      let right ← parseExpr
+      pure ⟨[], .binary .sub left right⟩
+  | some (.punctuation .star) =>
+      expectPunctuation .star
+      let right ← parseExpr
+      pure ⟨[], .binary .mul left right⟩
+  | _ => pure left
 
 partial def parseAtom : ParserM Expr := do
   match ← peek with
@@ -193,8 +249,16 @@ partial def parseAtom : ParserM Expr := do
             expectPunctuation .comma
             if (← peek) != some (.punctuation .closeParen) then xs := xs.concat (← parseExpr)
           expectPunctuation .closeParen; pure ⟨[], .tuple xs⟩
-      | _ => expectPunctuation .closeParen; pure ⟨[], .paren first⟩
+      | _ => expectPunctuation .closeParen; pure ⟨[], .paren (normalizeBreakParen first)⟩
   | some (.punctuation .openBrace) => pure ⟨[], .block (← parseBlock) none⟩
+  | some (.punctuation .openBracket) =>
+      expectPunctuation .openBracket
+      let mut elems := []
+      while (← peek) != some (.punctuation .closeBracket) do
+        elems := elems.concat (← parseExpr)
+        if (← peek) == some (.punctuation .comma) then expectPunctuation .comma else pure ()
+      expectPunctuation .closeBracket
+      pure ⟨[], .array elems⟩
   | some (.punctuation .and) => expectPunctuation .and; pure ⟨[], .addrOf .ref_ .not (← parseExpr)⟩
   | some (.punctuation .star) => expectPunctuation .star; pure ⟨[], .unary .deref (← parseExpr)⟩
   | some (.punctuation .minus) => expectPunctuation .minus; pure ⟨[], .unary .neg (← parseExpr)⟩
@@ -220,6 +284,11 @@ partial def parseExprSuffix (left : Expr) : ParserM Expr := do
         if (← peek) == some (.punctuation .comma) then expectPunctuation .comma else pure ()
       expectPunctuation .closeParen
       parseExprSuffix ⟨[], .call left args⟩
+  | some (.punctuation .openBracket) =>
+      expectPunctuation .openBracket
+      let index ← parseExpr
+      expectPunctuation .closeBracket
+      parseExprSuffix ⟨[], .index left index⟩
   | some (.punctuation .dot) => expectPunctuation .dot; let field ← parseIdent; parseExprSuffix ⟨[], .field left field⟩
   | some (.punctuation .question) => expectPunctuation .question; parseExprSuffix ⟨[], .try_ left⟩
   | _ => pure left
@@ -252,6 +321,9 @@ partial def parseBlock : ParserM Block := do
         let kind ← match ← peek with | some (.punctuation .eq) => expectPunctuation .eq; pure (.init (← parseExpr)) | _ => pure .decl
         expectPunctuation .semi
         stmts := stmts.concat (.let_ ⟨false, [], pat, ty, kind⟩)
+    | some (.keyword .const_) | some (.keyword .trait_) | some (.keyword .impl_) |
+      some (.keyword .struct_) | some (.keyword .pub_) =>
+        stmts := stmts.concat (.item (← parseItem))
     | _ =>
         let expr ← parseExpr
         if (← peek) == some (.punctuation .semi) then expectPunctuation .semi; stmts := stmts.concat (.semi expr) else stmts := stmts.concat (.expr expr)
@@ -275,6 +347,57 @@ partial def parseFunction (attrs : List Attribute) (vis : Visibility) : ParserM 
   let output ← match ← peek with | some (.punctuation .rArrow) => expectPunctuation .rArrow; pure (some (← parseTy)) | _ => pure none
   let body ← match ← peek with | some (.punctuation .openBrace) => pure (some (← parseBlock)) | _ => expectPunctuation .semi; pure none
   pure (.fn_ attrs vis ⟨.implicit, ident, emptyGenerics, ⟨emptyHeader, ⟨inputs, output⟩⟩, none, body⟩)
+
+partial def parseConstItem : ParserM ConstItem := do
+  expectKeyword .const_
+  let ident ← parseIdent
+  expectPunctuation .colon
+  let ty ← parseTy
+  expectPunctuation .eq
+  let rhs ← parseExpr
+  expectPunctuation .semi
+  pure ⟨.implicit, ident, emptyGenerics, ty, .body (some rhs)⟩
+
+partial def parseTraitItem : ParserM AssocItem := do
+  match ← peek with
+  | some (.keyword .const_) => pure ⟨[], .inherited, .const_ (← parseConstItem)⟩
+  | some token => parserFail AssocItem s!"unsupported trait item {describeLexToken token}"
+  | none => parserFail AssocItem "unexpected end of trait items"
+
+partial def parseTraitItems : ParserM (List AssocItem) := do
+  expectPunctuation .openBrace
+  let mut items := []
+  while (← peek) != some (.punctuation .closeBrace) do
+    items := items.concat (← parseTraitItem)
+  expectPunctuation .closeBrace
+  pure items
+
+partial def parseTraitItemDecl (attrs : List Attribute) (vis : Visibility) : ParserM Item := do
+  expectKeyword .trait_
+  let ident ← parseIdent
+  let items ← parseTraitItems
+  pure (.trait_ attrs vis ⟨.unrestricted, .no, .safe, .no, ident, emptyGenerics, [], items⟩)
+
+partial def parseImplDecl (attrs : List Attribute) (vis : Visibility) : ParserM Item := do
+  expectKeyword .impl_
+  let first ← match ← peek with
+    | some (.keyword .dyn_) =>
+        expectKeyword .dyn_
+        let path ← parsePath
+        pure (.traitObject [.trait_ ⟨[], ⟨.never, .normal, .positive⟩, ⟨path⟩, .no⟩] .dyn_)
+    | _ => pure (.path none (← parsePath))
+  let (traitRef, selfTy) ← match ← peek with
+    | some (.keyword .for_) =>
+        expectKeyword .for_
+        let selfTy ← parseTy
+        let path ← match first with
+          | .path _ path => pure path
+          | _ => parserFail Path "expected a trait path before `for`"
+        pure (some ⟨path⟩, selfTy)
+    | _ => pure (none, first)
+  let items ← parseTraitItems
+  let header := traitRef.map fun traitRef => ⟨.implicit, .safe, .positive, traitRef⟩
+  pure (.impl_ attrs vis ⟨emptyGenerics, .no, header, selfTy, items⟩)
 
 partial def parseUseTree : ParserM UseTree := do
   let prefix_ ← parsePath
@@ -306,6 +429,14 @@ partial def parseItem (attrs : List Attribute := []) (vis : Visibility := .inher
         | _ => pure .public_
       parseItem attrs visibility
   | some (.keyword .fn_) => parseFunction attrs vis
+  | some (.keyword .const_) => pure (.const_ attrs vis (← parseConstItem))
+  | some (.keyword .trait_) => parseTraitItemDecl attrs vis
+  | some (.keyword .impl_) => parseImplDecl attrs vis
+  | some (.keyword .struct_) =>
+      expectKeyword .struct_
+      let name ← parseIdent
+      expectPunctuation .semi
+      pure (.struct_ attrs vis name emptyGenerics .unit)
   | some (.keyword .mod_) =>
       expectKeyword .mod_; let name ← parseIdent
       let kind ← match ← peek with
@@ -319,7 +450,7 @@ partial def parseItem (attrs : List Attribute := []) (vis : Visibility := .inher
   | some (.keyword .use_) => expectKeyword .use_; let tree ← parseUseTree; expectPunctuation .semi; pure (.use_ attrs vis tree)
   | some (.keyword .macroRules) =>
       expectKeyword .macroRules; expectPunctuation .bang; let name ← parseIdent; let body ← parseDelimArgs
-      pure (.macroDef attrs vis name ⟨body, true⟩)
+      pure (.macroDef attrs vis name ⟨{ body with tokens := stripMacroRuleSemis body.tokens }, true⟩)
   | some (.ident _ _) =>
       let path ← parsePath
       expectPunctuation .bang

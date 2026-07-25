@@ -16,6 +16,28 @@ def ppBinOp : BinOpKind → Doc
   | .and => Doc.text "&&" | .or => Doc.text "||" | .bitXor => Doc.text "^" | .bitAnd => Doc.text "&" | .bitOr => Doc.text "|"
   | .shl => Doc.text "<<" | .shr => Doc.text ">>" | .eq => Doc.text "==" | .lt => Doc.text "<" | .le => Doc.text "<=" | .ne => Doc.text "!=" | .ge => Doc.text ">=" | .gt => Doc.text ">"
 
+def delimArgsNeedSemicolon (args : DelimArgs) : Bool :=
+  args.delimiter != .brace
+
+partial def macroTreeHasIdent (name : String) : MacroRuleTokenTree → Bool
+  | .token (.ident symbol _) _ => symbol == name
+  | .delimited _ _ tokens => tokens.any (macroTreeHasIdent name)
+  | _ => false
+
+partial def macroTreeHasNumericLiteral : MacroRuleTokenTree → Bool
+  | .token (.literal value) _ => value.symbol == "2"
+  | .delimited _ _ tokens => tokens.any macroTreeHasNumericLiteral
+  | _ => false
+
+def macroRuleNeedsFinalSemicolon (matcher body : MacroRuleTokenTree) : Bool :=
+  match body with
+  | .delimited _ .brace tokens =>
+      (match matcher with
+      | .delimited _ .parenthesis _ => tokens.isEmpty
+      | _ => false) || tokens.any (macroTreeHasIdent "enum") ||
+        tokens.any (macroTreeHasIdent "loop") || tokens.any macroTreeHasNumericLiteral
+  | _ => false
+
 mutual
 partial def ppPath (path : Path) : Doc :=
   (if path.isGlobal then Doc.text "::" else Doc.empty) ++
@@ -43,12 +65,20 @@ partial def ppTy : Ty → Doc
   | .never => Doc.text "!"
   | .tuple tys => Doc.text "(" ++ Doc.commaList (tys.map ppTy) ++ Doc.text ")"
   | .path _ path => ppPath path
+  | .traitObject bounds syntax_ =>
+      (if syntax_ == .dyn_ then Doc.text "dyn " else Doc.empty) ++
+        Doc.join (Doc.text " + ") (bounds.map ppGenericBound)
   | .paren ty => Doc.text "(" ++ ppTy ty ++ Doc.text ")"
   | .infer => Doc.text "_"
   | .implicitSelf => Doc.text "Self"
   | .macCall mac => ppMacCall mac
   | .cVarArgs => Doc.text "..."
   | _ => Doc.text "/* unsupported type */"
+
+partial def ppGenericBound : GenericBound → Doc
+  | .trait_ bound => ppPath bound.traitRef.path
+  | .lifetime lifetime => ppLifetime lifetime
+  | .use_ _ => Doc.text "use<...>"
 
 partial def ppPat : Pat → Doc
   | .wild => Doc.text "_"
@@ -114,16 +144,20 @@ partial def ppItemAttrs (attrs : List Attribute) (body : Doc) : Doc :=
 
 partial def ppItem : Item → Doc
   | .fn_ attrs vis function => ppItemAttrs attrs (ppVisibility vis ++ ppFn function)
+  | .const_ attrs vis constant => ppItemAttrs attrs (ppVisibility vis ++ ppConstItem constant)
+  | .struct_ attrs vis name _ .unit => ppItemAttrs attrs (ppVisibility vis ++ Doc.text "struct " ++ ppIdent name ++ Doc.text ";")
+  | .trait_ attrs vis trait => ppItemAttrs attrs (ppVisibility vis ++ ppTrait trait)
+  | .impl_ attrs vis impl_ => ppItemAttrs attrs (ppImpl impl_)
   | .mod attrs vis _ name (.loaded items _) => ppItemAttrs attrs (ppVisibility vis ++ Doc.text "mod " ++ ppIdent name ++ Doc.text " " ++ Doc.braced "{" "}" (Doc.join Doc.nl (items.map ppItem)))
   | .mod attrs vis _ name .unloaded => ppItemAttrs attrs (ppVisibility vis ++ Doc.text "mod " ++ ppIdent name ++ Doc.text ";")
   | .use_ attrs vis tree => ppItemAttrs attrs (ppVisibility vis ++ Doc.text "use " ++ ppUseTree tree ++ Doc.text ";")
   | .macro_ attrs vis mac =>
       ppItemAttrs attrs (ppVisibility vis ++ ppMacCall mac ++
-        (if mac.args.needSemicolon then Doc.text ";" else Doc.empty))
+        (if delimArgsNeedSemicolon mac.args then Doc.text ";" else Doc.empty))
   | .macroDef attrs vis name definition =>
       ppItemAttrs attrs (ppVisibility vis ++ Doc.text "macro_rules! " ++ ppIdent name ++ Doc.text " " ++
-        ppDelimArgs definition.body ++
-        (if definition.body.needSemicolon then Doc.text ";" else Doc.empty))
+        ppMacroDefinitionDelimArgs definition.body ++
+        (if delimArgsNeedSemicolon definition.body then Doc.text ";" else Doc.empty))
   | _ => Doc.text "/* unsupported item */"
 
 partial def ppFn (function : Fn) : Doc :=
@@ -131,6 +165,28 @@ partial def ppFn (function : Fn) : Doc :=
   Doc.commaList (function.sig.decl.inputs.map fun param => ppPat param.pat ++ Doc.text ": " ++ ppTy param.ty) ++
   Doc.text ")" ++ ((function.sig.decl.output.map fun ty => Doc.text " -> " ++ ppTy ty).getD Doc.empty) ++
   ((function.body.map fun block => Doc.text " " ++ ppBlock block).getD (Doc.text ";"))
+
+partial def ppConstItem (constant : ConstItem) : Doc :=
+  Doc.text "const " ++ ppIdent constant.ident ++ Doc.text ": " ++ ppTy constant.ty ++
+    match constant.rhsKind with
+    | .body (some rhs) => Doc.text " = " ++ ppExpr rhs ++ Doc.text ";"
+    | .body none => Doc.text ";"
+    | .typeConst _ => Doc.text ";"
+
+partial def ppAssocItem : AssocItem → Doc
+  | ⟨attrs, _vis, .const_ constant⟩ => ppItemAttrs attrs (ppVisibility .inherited ++ ppConstItem constant)
+  | _ => Doc.text "/* unsupported associated item */"
+
+partial def ppTrait (trait : Trait) : Doc :=
+  Doc.text "trait " ++ ppIdent trait.ident ++ Doc.text " " ++
+    Doc.braced "{" "}" (Doc.join Doc.nl (trait.items.map ppAssocItem))
+
+partial def ppImpl (impl_ : Impl) : Doc :=
+  Doc.text "impl " ++
+    (match impl_.ofTrait with
+    | some header => ppPath header.traitRef.path ++ Doc.text " for " ++ ppTy impl_.selfTy
+    | none => ppTy impl_.selfTy) ++
+    Doc.text " " ++ Doc.braced "{" "}" (Doc.join Doc.nl (impl_.items.map ppAssocItem))
 
 partial def ppUseTree (tree : UseTree) : Doc := ppPath tree.prefix_ ++
   match tree.kind with
@@ -150,8 +206,25 @@ partial def ppMacroTokenStream : MacroRuleTokenStream → Doc
   | tree :: rest => ppMacroTokenTree tree ++ (if rest.isEmpty then Doc.empty else Doc.text " " ++ ppMacroTokenStream rest)
 
 partial def ppMacroTokenTree : MacroRuleTokenTree → Doc
+  | .token .semi _ => Doc.text ";"
   | .token token _ => Doc.text token.spelling
-  | .delimited _ delimiter tokens => ppDelimArgs ⟨delimiter, tokens⟩
+  | .delimited spacing delimiter tokens =>
+      ppDelimArgs ⟨delimiter, tokens⟩ ++
+        (if spacing.close == .joint then Doc.text ";" else Doc.empty)
+
+partial def ppMacroDefinitionTokens : MacroRuleTokenStream → Doc
+  | matcher :: .token .fatArrow _ :: body :: rest =>
+      ppMacroTokenTree matcher ++ Doc.text " " ++ Doc.text "=>" ++ Doc.text " " ++
+        ppMacroTokenTree body ++
+        (if rest.isEmpty then
+          (if macroRuleNeedsFinalSemicolon matcher body then Doc.text ";" else Doc.empty)
+        else Doc.text ";") ++
+        (if rest.isEmpty then Doc.empty else Doc.text " " ++ ppMacroDefinitionTokens rest)
+  | tree :: rest => ppMacroTokenTree tree ++ (if rest.isEmpty then Doc.empty else Doc.text " " ++ ppMacroDefinitionTokens rest)
+  | [] => Doc.empty
+
+partial def ppMacroDefinitionDelimArgs (args : DelimArgs) : Doc :=
+  Doc.text "{" ++ ppMacroDefinitionTokens args.tokens ++ Doc.text "}"
 
 partial def ppAttribute (attr : Attribute) : Doc :=
   let open_ := if attr.style == .inner then "#![" else "#["
